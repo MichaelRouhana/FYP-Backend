@@ -3,10 +3,7 @@ package com.example.FYP.Api.Entity;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -28,8 +25,11 @@ public class Fixture extends AuditableEntity{
     @Column(columnDefinition = "TEXT", nullable = false)
     private String rawJson;
 
-    @OneToMany(mappedBy = "fixture", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+
+    @EqualsAndHashCode.Exclude
+    @OneToMany(mappedBy = "fixture", cascade = CascadeType.ALL, fetch = FetchType.EAGER)
     private Set<Bet> betsSet = new HashSet<>();
+
 
     public Long getBets() {
         return (long) betsSet.size();

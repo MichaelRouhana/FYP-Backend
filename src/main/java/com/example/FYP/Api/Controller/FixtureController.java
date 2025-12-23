@@ -4,6 +4,7 @@ import com.example.FYP.Api.Loader.Annotation.Feature;
 import com.example.FYP.Api.Model.Patch.MatchPredictionSettingsPatchDTO;
 import com.example.FYP.Api.Model.Patch.MatchSettingsPatchDTO;
 import com.example.FYP.Api.Model.View.FixtureViewDTO;
+import com.example.FYP.Api.Model.View.UserViewDTO;
 import com.example.FYP.Api.Service.FixtureService;
 import com.example.FYP.Api.Service.FixtureSyncService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -41,6 +42,22 @@ public class FixtureController {
         return fixtureService.getPublicFixtures();
     }
 
+    @GetMapping("/{fixtureId}/settings")
+    public FixtureViewDTO.MatchSettingsView getFixtureMatchSettings(@PathVariable Long fixtureId) {
+        return fixtureService.getMatchSettings(fixtureId);
+    }
+
+    @GetMapping("/{fixtureId}/prediction-settings")
+    public FixtureViewDTO.MatchPredictionSettingsView getFixtureMatchPredictionSettings(@PathVariable Long fixtureId) {
+        return fixtureService.getMatchPredictionSettings(fixtureId);
+    }
+
+
+    @GetMapping("/{fixtureId}/users")
+    public List<UserViewDTO> getUsers(@PathVariable Long fixtureId) {
+        return fixtureService.getUsers(fixtureId);
+    }
+
 
 
 
@@ -52,7 +69,7 @@ public class FixtureController {
                             in = ParameterIn.HEADER)
 
             })
-    @PatchMapping("/matchPredictionSettings")
+    @PatchMapping("/prediction-settings")
     public ResponseEntity<?> patchMatchPredictionSettings(@RequestParam Long fixtureId,
                                                           @RequestBody MatchPredictionSettingsPatchDTO patchDTO) {
         fixtureService.patchMatchPredictionSettings(fixtureId, patchDTO);
@@ -67,7 +84,7 @@ public class FixtureController {
                             in = ParameterIn.HEADER)
 
             })
-    @PatchMapping("/matchSettings")
+    @PatchMapping("/settings")
     public ResponseEntity<?> patchMatchSettings(@RequestParam Long fixtureId,
                                                 @RequestBody MatchSettingsPatchDTO patchDTO) {
         fixtureService.patchMatchSettings(fixtureId, patchDTO);
