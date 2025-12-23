@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  app:
+    ##image: charbelba/erp:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spring-boot-app
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./src/main/resources/application.properties:/app/config/application.properties
+      - ./src/main/resources/client_secret_773653723597-i35sq1vmqe5kqveg7r9851gg7psmo83g.apps.googleusercontent.com.json:/app/config/client_secret_773653723597-i35sq1vmqe5kqveg7r9851gg7psmo83g.apps.googleusercontent.com.json
+    environment:
+      SPRING_CONFIG_LOCATION: "file:/app/config/application.properties"
+    depends_on:
+      - mysql
+      - logstash
+    networks:
+      - backend
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql-db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: jwt_auth_db
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - backend
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.6.0
+    container_name: logstash
+    ports:
+      - "5044:5044"
+    volumes:
+      - ./logstash.conf:/usr/share/logstash/config/logstash.conf
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - backend
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.6.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.transport.ssl.enabled=false  # Disable SSL for transport
+    ports:
+      - "9200:9200"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.6.0
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    networks:
+      - backend
+
+
+volumes:
+  mysql-data:
+
+networks:
+  backend:
+
+
+
+
