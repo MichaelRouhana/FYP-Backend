@@ -125,6 +125,7 @@ public class UserController {
                 .pfp(user.getPfp())
                 .email(user.getEmail())
                 .roles(user.getRoles().stream().map((role) -> role.getRole().name()).toList())
+                .points(user.getPoints() != null ? user.getPoints() : 0L)
                 .build());
     }
 

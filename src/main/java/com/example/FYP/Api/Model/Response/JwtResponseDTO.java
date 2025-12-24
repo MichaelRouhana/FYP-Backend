@@ -17,5 +17,6 @@ public class JwtResponseDTO {
     private String username;
     private String pfp;
     private List<String> roles;
+    private Long points;
 
 }
