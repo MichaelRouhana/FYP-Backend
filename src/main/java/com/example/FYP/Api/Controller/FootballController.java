@@ -12,7 +12,7 @@ import java.util.Map;
 @RequestMapping("/football")
 public class FootballController {
 
-    private String apiKey = "77cd6e963dd1f4c1d704edbe96289cf3";
+    private String apiKey = "7aa48d98c402dc071bb8405ebbb722ec";
 
     private final RestTemplate restTemplate = new RestTemplate();
 
