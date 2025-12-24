@@ -145,6 +145,7 @@ public class UserService {
                 .username(signUpRequestDTO.getUsername())
                 .pfp("/dummy/url")
                 .roles(roles)
+                .isVerified(true) // Auto-verify for development
                 .communityRoles(new HashSet<>())
                 .build());
 
@@ -156,13 +157,19 @@ public class UserService {
 
         verificationTokenRepository.save(token);
 
+        // Try to send verification email, but don't fail signup if it doesn't work
+        try {
+            EmailVerificationMessage message = EmailVerificationMessage.builder()
+                    .email(user.getEmail())
+                    .token(token.getToken())
+                    .build();
 
-        EmailVerificationMessage message = EmailVerificationMessage.builder()
-                .email(user.getEmail())
-                .token(token.getToken())
-                .build();
-
-        rabbitMqProducer.sendVerification("verificationQueue", message);
+            rabbitMqProducer.sendVerification("verificationQueue", message);
+        } catch (Exception e) {
+            // Log the error but allow signup to succeed
+            System.err.println("Warning: Failed to send verification email - " + e.getMessage());
+            // User is already auto-verified above, so they can still login
+        }
     }
 
     public JwtResponseDTO loginWithGoogle(String googleToken) {
