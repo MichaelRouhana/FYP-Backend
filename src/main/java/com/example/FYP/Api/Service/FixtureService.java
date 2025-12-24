@@ -14,6 +14,7 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -37,7 +38,9 @@ public class FixtureService {
         return fixtureMapper.toDTOs(fixtureRepository.findAll());
     }
 
+    @Cacheable(value = "publicFixtures")
     public List<FixtureViewDTO> getPublicFixtures() {
+        log.info("Fetching public fixtures from database (cache miss)");
         LocalDate today = LocalDate.now();
         LocalDate weekFromNow = today.plusDays(7);
         

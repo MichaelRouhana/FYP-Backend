@@ -4,6 +4,7 @@ import com.example.FYP.Api.Service.FixtureSyncService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -36,14 +37,16 @@ public class FixtureSyncJob {
     }
 
     /**
-     * Sync today and tomorrow every 5 minutes to keep data fresh
+     * Sync today and tomorrow every 2 minutes to keep data fresh.
+     * Also evicts the publicFixtures cache so the app gets fresh data.
      */
-    @Scheduled(fixedRate = 5 * 60 * 1000) // 5 minutes
+    @Scheduled(fixedRate = 2 * 60 * 1000) // 2 minutes (more frequent for live updates)
+    @CacheEvict(value = "publicFixtures", allEntries = true)
     public void syncTodayAndTomorrow() {
         try {
             syncService.syncFixtures(LocalDate.now().toString());
             syncService.syncFixtures(LocalDate.now().plusDays(1).toString());
-            log.info("Scheduled sync completed for today and tomorrow");
+            log.info("Scheduled sync completed for today and tomorrow (cache evicted)");
         } catch (Exception e) {
             log.error("Fixture sync failed", e);
         }
