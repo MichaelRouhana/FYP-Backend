@@ -91,6 +91,26 @@ public class FootBallService {
         return response.getBody();
     }
 
+    /**
+     * Fetches a single fixture by its ID from the Football API.
+     * This is used to get the latest status for a specific match.
+     */
+    public String getFixtureById(Long fixtureId) {
+        String url = "https://v3.football.api-sports.io/fixtures?id=" + fixtureId;
 
+        HttpHeaders headers = new HttpHeaders();
+        headers.put("x-apisports-key", Collections.singletonList(apiKey));
 
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+
+        ResponseEntity<String> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                entity,
+                String.class
+        );
+
+        log.info("Fetched fixture by ID: {}", fixtureId);
+        return response.getBody();
+    }
 }
