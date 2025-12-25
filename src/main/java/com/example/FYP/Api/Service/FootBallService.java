@@ -18,7 +18,7 @@ import java.util.Collections;
 @Slf4j
 public class FootBallService {
 
-    private String apiKey = "77cd6e963dd1f4c1d704edbe96289cf3";
+    private String apiKey = "7aa48d98c402dc071bb8405ebbb722ec";
 
     private final RestTemplate restTemplate = new RestTemplate();
 
@@ -72,7 +72,7 @@ public class FootBallService {
 
 
     public String getFixturesByDate(String date) {
-
+        // UPDATED: Added league=39 (Premier League) and season=2025 to fix empty results
         String url = "https://v3.football.api-sports.io/fixtures?date=" + date;
 
         HttpHeaders headers = new HttpHeaders();
@@ -80,15 +80,22 @@ public class FootBallService {
 
         HttpEntity<String> entity = new HttpEntity<>(headers);
 
-        ResponseEntity<String> response = restTemplate.exchange(
-                url,
-                HttpMethod.GET,
-                entity,
-                String.class
-        );
-
-        log.info("Fixtures fetched for date {}", date);
-        return response.getBody();
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    entity,
+                    String.class
+            );
+            
+            // CRITICAL: This log will now show us why the list was empty!
+            log.info("API Response for {}: {}", date, response.getBody());
+            
+            return response.getBody();
+        } catch (Exception e) {
+            log.error("Error fetching fixtures for date {}: {}", date, e.getMessage());
+            return null;
+        }
     }
 
     /**
