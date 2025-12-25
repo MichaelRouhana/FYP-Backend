@@ -34,13 +34,13 @@ public class FixtureResolveJob {
 
     /**
      * Resolves live fixtures by fetching fresh data from the Football API.
-     * This job runs every 30 seconds to:
+     * This job runs every 10 seconds to:
      * 1. Find all fixtures currently marked as "live" in the database
      * 2. Fetch the latest status from the Football API for each
      * 3. Update the rawJson with fresh data
      * 4. If a match has finished, resolve the associated bets
      */
-    @Scheduled(fixedDelay = 30000) // every 30 seconds
+    @Scheduled(fixedDelay = 10000) // every 10 seconds for faster updates
     @CacheEvict(value = "publicFixtures", allEntries = true)
     @Transactional
     public void resolveFinishedFixtures() {
@@ -103,11 +103,11 @@ public class FixtureResolveJob {
     }
     
     /**
-     * Also check "Not Started" fixtures that might have become live.
-     * This handles cases where the sync job missed the transition.
-     * Runs every 2 minutes.
+     * Check "Not Started" fixtures that might have started or finished.
+     * This handles cases where the sync job returns stale data.
+     * Runs every 20 seconds to catch matches that have started/finished.
      */
-    @Scheduled(fixedDelay = 120000) // every 2 minutes
+    @Scheduled(fixedDelay = 20000) // every 20 seconds
     @CacheEvict(value = "publicFixtures", allEntries = true)
     @Transactional
     public void checkNotStartedFixtures() {
@@ -115,15 +115,17 @@ public class FixtureResolveJob {
             List<Fixture> notStartedFixtures = fixtureRepository.findAllNotStartedFixtures();
             
             if (notStartedFixtures.isEmpty()) {
+                log.debug("No not-started fixtures to check");
                 return;
             }
             
-            log.debug("Checking {} not-started fixtures for status changes", notStartedFixtures.size());
+            log.info("Checking {} not-started fixtures for status changes", notStartedFixtures.size());
             int updatedCount = 0;
+            int finishedCount = 0;
             
             for (Fixture fixture : notStartedFixtures) {
                 try {
-                    // Fetch fresh data
+                    // Fetch fresh data by ID (more accurate than by-date)
                     String freshJson = footBallService.getFixtureById(fixture.getId());
                     JsonNode root = objectMapper.readTree(freshJson);
                     JsonNode response = root.path("response");
@@ -138,6 +140,12 @@ public class FixtureResolveJob {
                             fixtureRepository.save(fixture);
                             updatedCount++;
                             log.info("Fixture {} transitioned from NS to {}", fixture.getId(), freshStatus);
+                            
+                            // If it finished, also resolve bets
+                            if (FINISHED_STATUSES.contains(freshStatus)) {
+                                betResolverService.resolveBetsForFixture(fixture.getId());
+                                finishedCount++;
+                            }
                         }
                     }
                 } catch (Exception e) {
@@ -146,7 +154,7 @@ public class FixtureResolveJob {
             }
             
             if (updatedCount > 0) {
-                log.info("Updated {} fixtures that transitioned from NS status", updatedCount);
+                log.info("Updated {} fixtures from NS status ({} now finished)", updatedCount, finishedCount);
             }
         } catch (Exception e) {
             log.error("Check not-started fixtures job failed", e);

@@ -37,18 +37,29 @@ public class FixtureSyncJob {
     }
 
     /**
-     * Sync today and tomorrow every 2 minutes to keep data fresh.
-     * Also evicts the publicFixtures cache so the app gets fresh data.
+     * Sync today's fixtures every 1 minute to keep data fresh.
+     * The cache is evicted by FixtureSyncService.
      */
-    @Scheduled(fixedRate = 2 * 60 * 1000) // 2 minutes (more frequent for live updates)
-    @CacheEvict(value = "publicFixtures", allEntries = true)
-    public void syncTodayAndTomorrow() {
+    @Scheduled(fixedRate = 60 * 1000) // 1 minute for faster updates
+    public void syncToday() {
         try {
             syncService.syncFixtures(LocalDate.now().toString());
-            syncService.syncFixtures(LocalDate.now().plusDays(1).toString());
-            log.info("Scheduled sync completed for today and tomorrow (cache evicted)");
+            log.info("Scheduled sync completed for today");
         } catch (Exception e) {
-            log.error("Fixture sync failed", e);
+            log.error("Fixture sync failed for today", e);
+        }
+    }
+    
+    /**
+     * Sync tomorrow's fixtures every 5 minutes.
+     */
+    @Scheduled(fixedRate = 5 * 60 * 1000) // 5 minutes
+    public void syncTomorrow() {
+        try {
+            syncService.syncFixtures(LocalDate.now().plusDays(1).toString());
+            log.info("Scheduled sync completed for tomorrow");
+        } catch (Exception e) {
+            log.error("Fixture sync failed for tomorrow", e);
         }
     }
 }

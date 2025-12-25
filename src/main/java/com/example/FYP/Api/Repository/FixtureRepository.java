@@ -11,9 +11,7 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long>, JpaSpec
     
     /**
      * Finds all fixtures that are currently marked as "live" in their rawJson.
-     * Live statuses include: 1H, 2H, HT, ET, P, LIVE, BT
-     * This uses a native query with JSON extraction for PostgreSQL.
-     * For H2/other databases, we'll use a simpler approach with LIKE.
+     * Live statuses include: 1H, 2H, HT, ET, P, LIVE, BT, INT
      */
     @Query(value = "SELECT * FROM fixtures f WHERE " +
             "f.raw_json LIKE '%\"short\":\"1H\"%' OR " +
@@ -28,10 +26,27 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long>, JpaSpec
     List<Fixture> findAllLiveFixtures();
     
     /**
-     * Finds fixtures by status - useful for finding matches that need resolution.
-     * Matches that are "Not Started" (NS) and scheduled for today might become live.
+     * Finds fixtures that are "Not Started" (NS).
+     * These might need to transition to live or finished.
      */
     @Query(value = "SELECT * FROM fixtures f WHERE f.raw_json LIKE '%\"short\":\"NS\"%'",
             nativeQuery = true)
     List<Fixture> findAllNotStartedFixtures();
+    
+    /**
+     * Finds all fixtures that are NOT finished yet.
+     * This includes NS, live statuses, and any other non-finished status.
+     * Excludes: FT, AET, PEN, PST, CANC, ABD, AWD, WO
+     */
+    @Query(value = "SELECT * FROM fixtures f WHERE " +
+            "f.raw_json NOT LIKE '%\"short\":\"FT\"%' AND " +
+            "f.raw_json NOT LIKE '%\"short\":\"AET\"%' AND " +
+            "f.raw_json NOT LIKE '%\"short\":\"PEN\"%' AND " +
+            "f.raw_json NOT LIKE '%\"short\":\"PST\"%' AND " +
+            "f.raw_json NOT LIKE '%\"short\":\"CANC\"%' AND " +
+            "f.raw_json NOT LIKE '%\"short\":\"ABD\"%' AND " +
+            "f.raw_json NOT LIKE '%\"short\":\"AWD\"%' AND " +
+            "f.raw_json NOT LIKE '%\"short\":\"WO\"%'",
+            nativeQuery = true)
+    List<Fixture> findAllUnfinishedFixtures();
 }
