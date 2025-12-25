@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -22,11 +23,15 @@ public class FixtureSyncService {
     private final FootBallService footBallService;
     private final FixtureRepository fixtureRepository;
     private final ObjectMapper objectMapper;
+    
+    // Statuses that indicate a match is finished
+    private static final Set<String> FINISHED_STATUSES = Set.of("FT", "AET", "PEN", "PST", "CANC", "ABD", "AWD", "WO");
 
     /**
      * Syncs fixtures for a given date from the Football API.
-     * If a fixture already exists, only updates the rawJson (preserves settings).
-     * If it's new, creates it with default settings.
+     * - If fixture exists: compares old vs new status, updates rawJson
+     * - If status changed to finished: sets allowBetting = false
+     * - If new fixture: creates with default settings
      */
     @Transactional
     @CacheEvict(value = "publicFixtures", allEntries = true)
@@ -44,9 +49,11 @@ public class FixtureSyncService {
 
             int newCount = 0;
             int updatedCount = 0;
+            int finishedCount = 0;
 
             for (JsonNode matchNode : response) {
                 Long fixtureId = matchNode.path("fixture").path("id").asLong();
+                String newStatus = matchNode.path("fixture").path("status").path("short").asText();
                 
                 if (fixtureId == 0) {
                     log.warn("Skipping fixture with invalid ID");
@@ -54,20 +61,55 @@ public class FixtureSyncService {
                 }
 
                 // Check if fixture already exists
-                Optional<Fixture> existingFixture = fixtureRepository.findById(fixtureId);
+                Optional<Fixture> existingFixtureOpt = fixtureRepository.findById(fixtureId);
                 
-                if (existingFixture.isPresent()) {
-                    // Update only the rawJson, preserve existing settings
-                    Fixture fixture = existingFixture.get();
+                if (existingFixtureOpt.isPresent()) {
+                    Fixture fixture = existingFixtureOpt.get();
+                    
+                    // Get old status for comparison
+                    String oldStatus = "";
+                    try {
+                        JsonNode oldJson = objectMapper.readTree(fixture.getRawJson());
+                        oldStatus = oldJson.path("fixture").path("status").path("short").asText();
+                    } catch (Exception e) {
+                        log.warn("Could not parse old status for fixture {}", fixtureId);
+                    }
+                    
+                    // Update the rawJson
                     fixture.setRawJson(matchNode.toString());
+                    
+                    // If status changed to finished, disable betting
+                    if (!oldStatus.equals(newStatus) && FINISHED_STATUSES.contains(newStatus)) {
+                        if (fixture.getMatchSettings() == null) {
+                            fixture.setMatchSettings(MatchSettings.builder()
+                                    .allowBetting(false)
+                                    .allowBettingHT(false)
+                                    .showMatch(true)
+                                    .build());
+                        } else {
+                            fixture.getMatchSettings().setAllowBetting(false);
+                            fixture.getMatchSettings().setAllowBettingHT(false);
+                        }
+                        finishedCount++;
+                        log.info("Fixture {} finished ({} -> {}), betting disabled", 
+                                fixtureId, oldStatus, newStatus);
+                    }
+                    
                     fixtureRepository.save(fixture);
                     updatedCount++;
                 } else {
                     // Create new fixture with default settings
+                    // If already finished, disable betting from the start
+                    boolean isFinished = FINISHED_STATUSES.contains(newStatus);
+                    
                     Fixture fixture = Fixture.builder()
                             .id(fixtureId)
                             .rawJson(matchNode.toString())
-                            .matchSettings(defaultMatchSettings())
+                            .matchSettings(MatchSettings.builder()
+                                    .allowBetting(!isFinished)
+                                    .allowBettingHT(false)
+                                    .showMatch(true)
+                                    .build())
                             .matchPredictionSettings(defaultPredictionSettings())
                             .build();
                     fixtureRepository.save(fixture);
@@ -75,20 +117,13 @@ public class FixtureSyncService {
                 }
             }
 
-            log.info("Fixture sync for {}: {} new, {} updated", date, newCount, updatedCount);
+            log.info("Fixture sync for {}: {} new, {} updated, {} finished", 
+                    date, newCount, updatedCount, finishedCount);
 
         } catch (Exception e) {
             log.error("Failed to sync fixtures for date {}", date, e);
             throw new RuntimeException(e);
         }
-    }
-
-    private MatchSettings defaultMatchSettings() {
-        return MatchSettings.builder()
-                .allowBetting(true)
-                .allowBettingHT(false)
-                .showMatch(true)
-                .build();
     }
 
     private MatchPredictionSettings defaultPredictionSettings() {
