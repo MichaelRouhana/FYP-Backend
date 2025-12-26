@@ -30,6 +30,8 @@ public class FootballController {
             "leagues",
             "standings",
             "players",
+            "players/seasons",
+            "players/statistics",
             "odds"
     );
 

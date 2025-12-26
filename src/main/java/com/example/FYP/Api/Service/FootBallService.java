@@ -71,8 +71,9 @@ public class FootBallService {
     }
 
 
-    public String getFixturesByDate(String date) {
-        // UPDATED: Added league=39 (Premier League) and season=2025 to fix empty results
+public String getFixturesByDate(String date) {
+        // FIXED: Removed "&league=39" so we get ALL leagues (Egyptian, Spanish, etc.)
+        // This ensures postponed matches in other leagues get updated.
         String url = "https://v3.football.api-sports.io/fixtures?date=" + date;
 
         HttpHeaders headers = new HttpHeaders();
@@ -88,9 +89,8 @@ public class FootBallService {
                     String.class
             );
             
-            // CRITICAL: This log will now show us why the list was empty!
+            // This log will confirm we are getting results!
             log.info("API Response for {}: {}", date, response.getBody());
-            
             return response.getBody();
         } catch (Exception e) {
             log.error("Error fetching fixtures for date {}: {}", date, e.getMessage());
