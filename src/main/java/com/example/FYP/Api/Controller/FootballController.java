@@ -32,6 +32,7 @@ public class FootballController {
             "players",
             "players/seasons",
             "players/statistics",
+            "injuries",
             "odds"
     );
 
