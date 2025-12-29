@@ -23,6 +23,7 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -45,11 +46,31 @@ public class FixtureService {
         LocalDate weekFromNow = today.plusDays(7);
         
         return fixtureRepository.findAll().stream()
-                .filter(fixture ->
-                        fixture.getMatchSettings() != null &&
-                                Boolean.TRUE.equals(fixture.getMatchSettings().getShowMatch()) &&
-                                Boolean.TRUE.equals(fixture.getMatchSettings().getAllowBetting())
-                )
+                .filter(fixture -> {
+                    // Must have MatchSettings and showMatch must be true
+                    if (fixture.getMatchSettings() == null || 
+                        !Boolean.TRUE.equals(fixture.getMatchSettings().getShowMatch())) {
+                        return false;
+                    }
+                    
+                    // Check if match is finished
+                    boolean isFinished = false;
+                    try {
+                        JsonNode rawJson = objectMapper.readTree(fixture.getRawJson());
+                        String statusShort = rawJson.path("fixture").path("status").path("short").asText();
+                        isFinished = Set.of("FT", "AET", "PEN", "WO", "ABD", "AWD").contains(statusShort);
+                    } catch (Exception e) {
+                        log.warn("Failed to parse fixture status: {}", e.getMessage());
+                    }
+                    
+                    // For finished matches: only require showMatch == true
+                    // For upcoming/live matches: require both showMatch == true AND allowBetting == true
+                    if (isFinished) {
+                        return true; // Show finished matches if showMatch is true
+                    } else {
+                        return Boolean.TRUE.equals(fixture.getMatchSettings().getAllowBetting());
+                    }
+                })
                 // Filter by date - only show matches from today onwards (up to 7 days)
                 .filter(fixture -> {
                     try {
