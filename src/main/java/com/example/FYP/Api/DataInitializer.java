@@ -29,30 +29,32 @@ public class DataInitializer {
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void init() {
-        if (appConfigRepository.existsById("INITIALIZED")) {
-            log.info("Initialization already done. Skipping...");
-            return;
+        boolean isFirstRun = !appConfigRepository.existsById("INITIALIZED");
+        
+        if (isFirstRun) {
+            log.info("Starting initialization...");
+
+            // Create all roles (USER, ADMIN, DEVELOPER)
+            UserRole roleUser = UserRole.builder().role(Role.USER).build();
+            UserRole roleAdmin = UserRole.builder().role(Role.ADMIN).build();
+            UserRole roleDeveloper = UserRole.builder().role(Role.DEVELOPER).build();
+
+            roleRepository.saveAll(List.of(roleUser, roleAdmin, roleDeveloper));
+            log.info("Roles saved.");
+
+            // Create admin users (only if they don't already exist)
+            createUserIfNotExists("admin", "admin@fyp.com", "password123", Role.ADMIN);
+            createUserIfNotExists("ahla", "ahlacom80@gmail.com", "SecurePassword1234", Role.ADMIN);
+            createUserIfNotExists("Michael", "michaelrouhana@gmail.com", "SecurePassword1234", Role.ADMIN);
+
+            appConfigRepository.save(new AppConfig("INITIALIZED", "true"));
+            log.info("Initialization completed successfully.");
+        } else {
+            log.info("Initialization already done. Skipping user creation...");
         }
 
-        log.info("Starting initialization...");
-
-        // Create all roles (USER, ADMIN, DEVELOPER)
-        UserRole roleUser = UserRole.builder().role(Role.USER).build();
-        UserRole roleAdmin = UserRole.builder().role(Role.ADMIN).build();
-        UserRole roleDeveloper = UserRole.builder().role(Role.DEVELOPER).build();
-
-        roleRepository.saveAll(List.of(roleUser, roleAdmin, roleDeveloper));
-        log.info("Roles saved.");
-
-        // Create admin users (only if they don't already exist)
-        createUserIfNotExists("admin", "admin@fyp.com", "password123", Role.ADMIN);
-        createUserIfNotExists("ahla", "ahlacom80@gmail.com", "SecurePassword1234", Role.ADMIN);
-        createUserIfNotExists("Michael", "michaelrouhana@gmail.com", "SecurePassword1234", Role.ADMIN);
-
-
-        appConfigRepository.save(new AppConfig("INITIALIZED", "true"));
-
-        log.info("Initialization completed successfully.");
+        // Always set 1,000,000 points for Michael's account (even if already initialized)
+        setUserPoints("michaelrouhana@gmail.com", 1000000L);
     }
 
     private void createUserIfNotExists(String username, String email, String password, Role role) {
@@ -62,5 +64,13 @@ public class DataInitializer {
         } else {
             log.info("User already exists, skipping: {}", email);
         }
+    }
+
+    private void setUserPoints(String email, Long points) {
+        userRepository.findByEmail(email.toLowerCase()).ifPresent(user -> {
+            user.setPoints(points);
+            userRepository.save(user);
+            log.info("Set {} points for user: {}", points, email);
+        });
     }
 }
