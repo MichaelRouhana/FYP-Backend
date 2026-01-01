@@ -33,7 +33,8 @@ public class FootballController {
             "players/seasons",
             "players/statistics",
             "injuries",
-            "odds"
+            "odds",
+            "odds/bets"
     );
 
     /**
