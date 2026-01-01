@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class BetViewAllDTO {
     private Long id;
+    private Long fixtureId;
     private String marketType;
     private String selection;
     private Double stake;
