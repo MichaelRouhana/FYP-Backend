@@ -27,12 +27,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         // Note: With servlet context-path=/api/v1, this endpoint becomes /api/v1/ws
         // Register at /ws, but clients must connect to /api/v1/ws
         registry.addEndpoint("/ws")
-                .setAllowedOrigins("*") // Allow all origins for React Native
-                .setAllowedOriginPatterns("*");
+                .setAllowedOriginPatterns("*"); // ✅ Use this ONLY
         
         // SockJS endpoint for web browsers (fallback)
         registry.addEndpoint("/ws/sockjs")
-                .setAllowedOrigins("*")
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
     }

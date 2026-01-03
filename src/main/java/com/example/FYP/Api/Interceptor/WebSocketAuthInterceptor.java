@@ -41,7 +41,8 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                     log.info("🔑 Authorization header value: {}", authHeader.substring(0, Math.min(20, authHeader.length())) + "...");
                 }
 
-                if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                // Safer check handling nulls and short strings
+                if (authHeader == null || !authHeader.startsWith("Bearer ") || authHeader.length() < 7) {
                     log.error("❌ Missing or invalid Authorization header in WebSocket CONNECT. Header: {}", authHeader);
                     throw new RuntimeException("Missing or invalid Authorization header");
                 }

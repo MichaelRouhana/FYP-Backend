@@ -77,10 +77,8 @@ public class SecurityConfig implements WebMvcConfigurer {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Allow all origins for React Native and development
-        // In production, you should restrict this to specific domains
-        configuration.setAllowedOrigins(List.of("*"));
-        configuration.setAllowedOriginPatterns(List.of("*"));
+        // Use setAllowedOriginPatterns when allowCredentials is true
+        configuration.setAllowedOriginPatterns(List.of("*")); // ✅ Correct
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Cache-Control", "Content-Type"));
         configuration.setExposedHeaders(List.of("Authorization"));
