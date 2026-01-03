@@ -31,42 +31,51 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
         // Only handle CONNECT frames
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
-            log.info("WebSocket CONNECT attempt received");
+            log.info("🔌 WebSocket CONNECT attempt received");
+            log.info("📋 All headers: {}", accessor.toNativeHeaderMap());
             
             try {
                 String authHeader = accessor.getFirstNativeHeader("Authorization");
-                log.info("Authorization header present: {}", authHeader != null);
+                log.info("🔑 Authorization header present: {}", authHeader != null);
+                if (authHeader != null) {
+                    log.info("🔑 Authorization header value: {}", authHeader.substring(0, Math.min(20, authHeader.length())) + "...");
+                }
 
                 if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-                    log.error("Missing or invalid Authorization header in WebSocket CONNECT");
-                    throw new RuntimeException("Missing Authorization header");
+                    log.error("❌ Missing or invalid Authorization header in WebSocket CONNECT. Header: {}", authHeader);
+                    throw new RuntimeException("Missing or invalid Authorization header");
                 }
 
                 String token = authHeader.substring(7);
-                log.info("Extracting username from token...");
+                log.info("🔓 Extracting username from token...");
                 
                 String username = jwtService.extractUsername(token);
-                log.info("Username extracted: {}", username);
+                log.info("👤 Username extracted: {}", username);
 
                 // Load UserDetails via UserDetailsService
+                log.info("📚 Loading user details for: {}", username);
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                log.info("UserDetails loaded for: {}", userDetails.getUsername());
+                log.info("✅ UserDetails loaded for: {}", userDetails.getUsername());
 
+                log.info("🔍 Validating JWT token...");
                 if (!jwtService.validateToken(token, userDetails)) {
-                    log.error("JWT token validation failed for user: {}", username);
+                    log.error("❌ JWT token validation failed for user: {}", username);
                     throw new RuntimeException("Invalid JWT token");
                 }
 
-                log.info("JWT token validated successfully for user: {}", username);
+                log.info("✅ JWT token validated successfully for user: {}", username);
 
                 // Set authenticated Principal for this session
                 UsernamePasswordAuthenticationToken auth =
                         new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
 
                 accessor.setUser(auth);
-                log.info("WebSocket authentication successful for user: {}", username);
+                log.info("🎉 WebSocket authentication successful for user: {}", username);
             } catch (Exception e) {
-                log.error("WebSocket authentication failed: {}", e.getMessage(), e);
+                log.error("❌ WebSocket authentication failed: {}", e.getMessage(), e);
+                log.error("❌ Exception class: {}", e.getClass().getName());
+                log.error("❌ Stack trace:", e);
+                // Re-throw to let Spring handle the error response
                 throw new RuntimeException("WebSocket authentication failed: " + e.getMessage(), e);
             }
         }
