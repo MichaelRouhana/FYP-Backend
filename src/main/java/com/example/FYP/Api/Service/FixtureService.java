@@ -1,12 +1,15 @@
 package com.example.FYP.Api.Service;
 
+import com.example.FYP.Api.Entity.Bet;
 import com.example.FYP.Api.Entity.Fixture;
 import com.example.FYP.Api.Entity.MatchPredictionSettings;
 import com.example.FYP.Api.Entity.MatchSettings;
+import com.example.FYP.Api.Entity.User;
 import com.example.FYP.Api.Mapper.FixtureMapper;
 import com.example.FYP.Api.Model.Patch.MatchPredictionSettingsPatchDTO;
 import com.example.FYP.Api.Model.Patch.MatchSettingsPatchDTO;
 import com.example.FYP.Api.Model.View.FixtureViewDTO;
+import com.example.FYP.Api.Model.View.UserViewDTO;
 import com.example.FYP.Api.Repository.FixtureRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,7 +26,9 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -133,5 +138,42 @@ public class FixtureService {
         modelMapper.map(patchDTO, fixture.getMatchPredictionSettings());
 
         fixtureRepository.save(fixture);
+    }
+
+    public FixtureViewDTO.MatchSettingsView getMatchSettings(Long fixtureId) {
+        Fixture fixture = fixtureRepository.findById(fixtureId)
+                .orElseThrow(() -> new EntityNotFoundException("Fixture not found: " + fixtureId));
+
+        MatchSettings matchSettings = fixture.getMatchSettings() != null ? fixture.getMatchSettings() : new MatchSettings();
+
+        // Map entity to DTO
+        return modelMapper.map(matchSettings, FixtureViewDTO.MatchSettingsView.class);
+    }
+
+    public FixtureViewDTO.MatchPredictionSettingsView getMatchPredictionSettings(Long fixtureId) {
+        Fixture fixture = fixtureRepository.findById(fixtureId)
+                .orElseThrow(() -> new EntityNotFoundException("Fixture not found: " + fixtureId));
+
+        MatchPredictionSettings matchPredictionSettings = fixture.getMatchPredictionSettings() != null
+                ? fixture.getMatchPredictionSettings()
+                : new MatchPredictionSettings();
+
+        // Map entity to DTO
+        return modelMapper.map(matchPredictionSettings, FixtureViewDTO.MatchPredictionSettingsView.class);
+    }
+
+    public List<UserViewDTO> getUsers(Long fixtureId) {
+        Fixture fixture = fixtureRepository.findById(fixtureId)
+                .orElseThrow(() -> new EntityNotFoundException("Fixture not found: " + fixtureId));
+
+        System.out.println(fixture.getBetsSet().size());
+        Set<User> uniqueUsers = fixture.getBetsSet().stream()
+                .map(Bet::getUser)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        return uniqueUsers.stream()
+                .map(user -> modelMapper.map(user, UserViewDTO.class))
+                .collect(Collectors.toList());
     }
 }

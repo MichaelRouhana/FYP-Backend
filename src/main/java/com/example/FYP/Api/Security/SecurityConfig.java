@@ -54,6 +54,7 @@ public class SecurityConfig implements WebMvcConfigurer {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/users/login", "/users/signup", "/users/verify", "/users/login/google").permitAll()
+                        .requestMatchers("/ws/**").permitAll() // WebSocket endpoint
                         .requestMatchers("/txn/**",
                                 "/bets/**",
                                 "/dashboard/**",
