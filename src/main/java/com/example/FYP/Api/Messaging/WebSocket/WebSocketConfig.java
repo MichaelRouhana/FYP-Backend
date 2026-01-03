@@ -23,9 +23,15 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // Raw WebSocket endpoint for React Native and other native clients
         registry.addEndpoint("/ws")
-                .setAllowedOrigins("http://127.0.0.1:5500")
-
+                .setAllowedOrigins("*") // Allow all origins for React Native
+                .setAllowedOriginPatterns("*");
+        
+        // SockJS endpoint for web browsers (fallback)
+        registry.addEndpoint("/ws/sockjs")
+                .setAllowedOrigins("*")
+                .setAllowedOriginPatterns("*")
                 .withSockJS();
     }
 
