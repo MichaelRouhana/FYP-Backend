@@ -24,8 +24,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // Raw WebSocket endpoint for React Native and other native clients
-        // Note: WebSocket endpoints are NOT affected by servlet context-path
-        // They are registered at the root level, so use /ws (not /api/v1/ws)
+        // Note: With servlet context-path=/api/v1, this endpoint becomes /api/v1/ws
+        // Register at /ws, but clients must connect to /api/v1/ws
         registry.addEndpoint("/ws")
                 .setAllowedOrigins("*") // Allow all origins for React Native
                 .setAllowedOriginPatterns("*");
