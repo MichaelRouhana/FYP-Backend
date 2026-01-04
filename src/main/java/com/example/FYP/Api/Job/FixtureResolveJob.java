@@ -123,7 +123,7 @@ public class FixtureResolveJob {
             }
             
             if (checkedCount > 0) {
-                log.info("Resolve job: checked {}, updated {}, finished {}", 
+                log.debug("Resolve job: checked {}, updated {}, finished {}", 
                         checkedCount, updatedCount, finishedCount);
             }
         } catch (Exception e) {

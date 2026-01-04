@@ -117,7 +117,7 @@ public String getFixturesByDate(String date) {
                 String.class
         );
 
-        log.info("Fetched fixture by ID: {}", fixtureId);
+        log.debug("Fetched fixture by ID: {}", fixtureId);
         return response.getBody();
     }
 }

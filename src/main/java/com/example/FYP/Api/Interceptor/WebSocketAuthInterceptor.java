@@ -13,6 +13,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 import com.example.FYP.Api.Service.UserDetailsServiceImpl;
+import org.springframework.messaging.MessageHandler;
+import org.springframework.messaging.MessageChannel;
 
 @Slf4j
 @Component
@@ -24,13 +26,36 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
-        StompHeaderAccessor accessor =
-                MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+        try {
+            // Log ALL messages for debugging
+            log.info("📥 preSend called - Message type: {}, Channel: {}", 
+                    message.getClass().getSimpleName(), 
+                    channel != null ? channel.getClass().getSimpleName() : "null");
+            
+            StompHeaderAccessor accessor =
+                    MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
 
-        if (accessor == null) return message;
+            if (accessor == null) {
+                log.warn("⚠️ StompHeaderAccessor is null, skipping interceptor. Message headers: {}", message.getHeaders());
+                return message;
+            }
+
+            StompCommand command = accessor.getCommand();
+            log.info("📨 Interceptor called for STOMP command: {}", command);
+            
+            // Log all commands for debugging
+            if (command != null) {
+                log.info("📋 STOMP Command: {}, Session: {}, User: {}, All headers: {}", 
+                        command, 
+                        accessor.getSessionId(), 
+                        accessor.getUser() != null ? accessor.getUser().getName() : "null",
+                        accessor.toNativeHeaderMap());
+            } else {
+                log.warn("⚠️ STOMP command is null! Message headers: {}", accessor.toNativeHeaderMap());
+            }
 
         // Only handle CONNECT frames
-        if (StompCommand.CONNECT.equals(accessor.getCommand())) {
+        if (StompCommand.CONNECT.equals(command)) {
             log.info("🔌 WebSocket CONNECT attempt received");
             log.info("📋 All headers: {}", accessor.toNativeHeaderMap());
             
@@ -81,6 +106,21 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             }
         }
 
-        return message;
+            return message;
+        } catch (Exception e) {
+            log.error("❌ Exception in preSend interceptor: {}", e.getMessage(), e);
+            throw e;
+        }
+    }
+    
+    @Override
+    public void afterSendCompletion(Message<?> message, MessageChannel channel, boolean sent, Exception ex) {
+        if (ex != null) {
+            StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+            log.error("❌ Error after sending STOMP message. Command: {}, Session: {}, Error: {}", 
+                    accessor != null ? accessor.getCommand() : "unknown",
+                    accessor != null ? accessor.getSessionId() : "unknown",
+                    ex.getMessage(), ex);
+        }
     }
 }

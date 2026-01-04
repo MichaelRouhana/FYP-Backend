@@ -54,7 +54,8 @@ public class SecurityConfig implements WebMvcConfigurer {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/users/login", "/users/signup", "/users/verify", "/users/login/google").permitAll()
-                        .requestMatchers("/ws", "/ws/**", "/ws/sockjs/**", "/api/v1/ws", "/api/v1/ws/**", "/api/v1/ws/sockjs/**").permitAll() // WebSocket endpoints (handshake happens before auth)
+                        // WebSocket endpoints - must be permitted for upgrade request
+                        .requestMatchers("/ws", "/ws/**", "/ws/sockjs/**", "/api/v1/ws/**").permitAll()
                         .requestMatchers("/txn/**",
                                 "/bets/**",
                                 "/dashboard/**",
@@ -77,8 +78,7 @@ public class SecurityConfig implements WebMvcConfigurer {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Use setAllowedOriginPatterns when allowCredentials is true
-        configuration.setAllowedOriginPatterns(List.of("*")); // ✅ Correct
+        configuration.setAllowedOrigins(List.of("http://127.0.0.1:5500"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Cache-Control", "Content-Type"));
         configuration.setExposedHeaders(List.of("Authorization"));
