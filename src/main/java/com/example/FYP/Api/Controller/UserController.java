@@ -203,7 +203,12 @@ public class UserController {
         profileDTO.setTotalWins(totalWins);
         profileDTO.setWinRate(winRate);
         profileDTO.setAbout(currentUser.getAbout()); // Include about field
-        profileDTO.setCountry(currentUser.getCountry()); // Include country from User entity
+        
+        String country = currentUser.getCountry();
+        System.out.println("🌍 Profile - User country from DB: " + country);
+        profileDTO.setCountry(country); // Include country from User entity
+        System.out.println("🌍 Profile - DTO country set to: " + profileDTO.getCountry());
+        
         profileDTO.setRoles(currentUser.getRoles().stream()
                 .map(role -> role.getRole().name())
                 .toList());

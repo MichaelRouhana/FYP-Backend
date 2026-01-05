@@ -140,15 +140,20 @@ public class UserService {
 
         signUpRequestDTO.setPassword(encodedPassword);
 
+        String country = signUpRequestDTO.getCountry();
+        System.out.println("🌍 Signup - Country received: " + country);
+        
         User user = userRepository.save(User.builder().email(email)
                 .password(encodedPassword)
                 .username(signUpRequestDTO.getUsername())
                 .pfp("/dummy/url")
-                .country(signUpRequestDTO.getCountry()) // Save country from signup
+                .country(country) // Save country from signup
                 .roles(roles)
                 .isVerified(true) // Auto-verify for development
                 .communityRoles(new HashSet<>())
                 .build());
+        
+        System.out.println("🌍 Signup - Country saved to user: " + user.getCountry());
 
         VerificationToken token = VerificationToken.builder()
                 .token(UUID.randomUUID().toString())
