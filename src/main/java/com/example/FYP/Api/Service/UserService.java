@@ -144,6 +144,7 @@ public class UserService {
                 .password(encodedPassword)
                 .username(signUpRequestDTO.getUsername())
                 .pfp("/dummy/url")
+                .country(signUpRequestDTO.getCountry()) // Save country from signup
                 .roles(roles)
                 .isVerified(true) // Auto-verify for development
                 .communityRoles(new HashSet<>())

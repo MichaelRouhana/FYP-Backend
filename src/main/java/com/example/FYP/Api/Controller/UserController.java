@@ -37,9 +37,14 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.Map;
 
@@ -198,7 +203,7 @@ public class UserController {
         profileDTO.setTotalWins(totalWins);
         profileDTO.setWinRate(winRate);
         profileDTO.setAbout(currentUser.getAbout()); // Include about field
-        profileDTO.setCountry(null); // TODO: Map from address if User has address field
+        profileDTO.setCountry(currentUser.getCountry()); // Include country from User entity
         profileDTO.setRoles(currentUser.getRoles().stream()
                 .map(role -> role.getRole().name())
                 .toList());
@@ -263,21 +268,69 @@ public class UserController {
                     @ApiResponse(description = "Avatar uploaded successfully", responseCode = "200")
             })
     @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<Map<String, String>> uploadAvatar(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<Map<String, String>> uploadAvatar(
+            @RequestParam("file") MultipartFile file,
+            HttpServletRequest request) throws IOException {
         User currentUser = securityContext.getCurrentUser();
         
-        // For now, save to local uploads folder or return a dummy URL
-        // TODO: Implement proper file storage (S3, local filesystem, etc.)
-        String fileName = "avatar_" + currentUser.getId() + "_" + System.currentTimeMillis() + 
-                         (file.getOriginalFilename() != null ? 
-                          file.getOriginalFilename().substring(file.getOriginalFilename().lastIndexOf('.')) : ".jpg");
+        System.out.println("📸 Avatar upload received for user: " + currentUser.getUsername());
+        System.out.println("📸 File name: " + file.getOriginalFilename());
+        System.out.println("📸 File size: " + file.getSize() + " bytes");
+        System.out.println("📸 Content type: " + file.getContentType());
         
-        // Simple implementation: just update with a URL pattern
-        // In production, you'd save the file and return the actual URL
-        String avatarUrl = "/uploads/avatars/" + fileName;
+        if (file.isEmpty()) {
+            throw new ApiRequestException("File is empty");
+        }
         
+        // Create uploads directory if it doesn't exist
+        String uploadDir = "uploads/avatars";
+        Path uploadPath = Paths.get(uploadDir);
+        if (!Files.exists(uploadPath)) {
+            Files.createDirectories(uploadPath);
+            System.out.println("📁 Created upload directory: " + uploadPath.toAbsolutePath());
+        }
+        
+        // Generate unique filename
+        String fileExtension = "";
+        if (file.getOriginalFilename() != null && file.getOriginalFilename().contains(".")) {
+            fileExtension = file.getOriginalFilename().substring(file.getOriginalFilename().lastIndexOf('.'));
+        } else {
+            // Determine extension from content type
+            if (file.getContentType() != null) {
+                if (file.getContentType().contains("jpeg") || file.getContentType().contains("jpg")) {
+                    fileExtension = ".jpg";
+                } else if (file.getContentType().contains("png")) {
+                    fileExtension = ".png";
+                } else {
+                    fileExtension = ".jpg"; // Default
+                }
+            } else {
+                fileExtension = ".jpg";
+            }
+        }
+        
+        String fileName = "avatar_" + currentUser.getId() + "_" + System.currentTimeMillis() + fileExtension;
+        Path filePath = uploadPath.resolve(fileName);
+        
+        // Save the file
+        Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+        System.out.println("💾 File saved to: " + filePath.toAbsolutePath());
+        
+        // Construct the full URL from the request
+        String scheme = request.getScheme(); // http or https
+        String serverName = request.getServerName(); // IP or hostname
+        int serverPort = request.getServerPort();
+        String contextPath = request.getContextPath(); // /api/v1
+        
+        // Build the full URL
+        String baseUrl = scheme + "://" + serverName + (serverPort != 80 && serverPort != 443 ? ":" + serverPort : "") + contextPath;
+        String avatarUrl = baseUrl + "/uploads/avatars/" + fileName;
+        
+        // Update user with the new avatar URL
         currentUser.setPfp(avatarUrl);
         userRepository.save(currentUser);
+        
+        System.out.println("✅ Avatar URL updated: " + avatarUrl);
         
         return ResponseEntity.ok(Map.of("avatarUrl", avatarUrl));
     }
