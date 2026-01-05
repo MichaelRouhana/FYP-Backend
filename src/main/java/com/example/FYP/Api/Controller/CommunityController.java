@@ -316,6 +316,7 @@ public class  CommunityController {
                     dto.setId(msg.getId());
                     dto.setContent(msg.getContent());
                     dto.setSenderUsername(msg.getSender().getUsername());
+                    dto.setSenderEmail(msg.getSender().getEmail()); // Include email for identity verification
                     dto.setSenderId(msg.getSender().getId());
                     dto.setSentAt(msg.getSentAt() != null ? msg.getSentAt().format(formatter) : null);
                     return dto;

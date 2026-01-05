@@ -11,6 +11,7 @@ public class CommunityMessageDTO {
     private Long id; // For REST API responses (message history)
     private String content;
     private String senderUsername;
+    private String senderEmail; // Email for identity verification
     private String sentAt; // ISO date string for frontend
     private Long senderId; // Optional, for frontend reference
     

@@ -62,6 +62,7 @@ public class CommunityChatController {
         dto.setId(saved.getId());
         dto.setContent(saved.getContent());
         dto.setSenderUsername(sender.getUsername());
+        dto.setSenderEmail(sender.getEmail()); // Include email for identity verification
         dto.setSenderId(sender.getId());
         dto.setSentAt(now.format(java.time.format.DateTimeFormatter.ISO_DATE_TIME));
         return dto;
