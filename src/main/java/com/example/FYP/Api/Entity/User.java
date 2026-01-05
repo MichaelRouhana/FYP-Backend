@@ -62,6 +62,9 @@ public class User extends AuditableEntity{
     @NotBlank
     private String pfp;
 
+    @Column(name = "about", length = 1000)
+    private String about; // User's bio/about section
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "user_roles",
             joinColumns = @JoinColumn(name = "user_id"),

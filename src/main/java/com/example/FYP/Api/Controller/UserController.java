@@ -8,10 +8,15 @@ import com.example.FYP.Api.Model.Request.LoginRequestDTO;
 import com.example.FYP.Api.Model.Request.SignUpRequestDTO;
 import com.example.FYP.Api.Model.Response.JwtResponseDTO;
 import com.example.FYP.Api.Entity.BetStatus;
+import com.example.FYP.Api.Exception.UserNotFoundException;
+import com.example.FYP.Api.Model.Request.ChangePasswordDTO;
+import com.example.FYP.Api.Model.Request.UpdateAboutDTO;
 import com.example.FYP.Api.Model.View.CommunityViewDTO;
 import com.example.FYP.Api.Model.View.UserViewDTO;
 import com.example.FYP.Api.Repository.BetRepository;
 import com.example.FYP.Api.Repository.UserRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.multipart.MultipartFile;
 import com.example.FYP.Api.Security.SecurityContext;
 import com.example.FYP.Api.Service.UserService;
 import com.example.FYP.Api.Util.PagedResponse;
@@ -50,6 +55,7 @@ public class UserController {
     private final UserService userService;
     private final SecurityContext securityContext;
     private final BetRepository betRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Operation(summary = "login user", responses = {
             @ApiResponse(description = "User found", responseCode = "200",
@@ -191,11 +197,89 @@ public class UserController {
         profileDTO.setTotalBets(totalBets);
         profileDTO.setTotalWins(totalWins);
         profileDTO.setWinRate(winRate);
+        profileDTO.setAbout(currentUser.getAbout()); // Include about field
+        profileDTO.setCountry(null); // TODO: Map from address if User has address field
         profileDTO.setRoles(currentUser.getRoles().stream()
                 .map(role -> role.getRole().name())
                 .toList());
         
         return ResponseEntity.ok(profileDTO);
+    }
+
+    @Operation(summary = "Update user about section",
+            parameters = {
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER)
+            },
+            responses = {
+                    @ApiResponse(description = "About section updated successfully", responseCode = "200")
+            })
+    @PatchMapping("/profile")
+    public ResponseEntity<Void> updateAbout(@RequestBody @Valid UpdateAboutDTO updateAboutDTO) {
+        User currentUser = securityContext.getCurrentUser();
+        currentUser.setAbout(updateAboutDTO.getAbout());
+        userRepository.save(currentUser);
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(summary = "Change user password",
+            parameters = {
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER)
+            },
+            responses = {
+                    @ApiResponse(description = "Password changed successfully", responseCode = "200"),
+                    @ApiResponse(description = "Invalid old password", responseCode = "400")
+            })
+    @PostMapping("/change-password")
+    public ResponseEntity<Void> changePassword(@RequestBody @Valid ChangePasswordDTO changePasswordDTO) {
+        User currentUser = securityContext.getCurrentUser();
+        
+        // Validate old password
+        if (!passwordEncoder.matches(changePasswordDTO.getOldPassword(), currentUser.getPassword())) {
+            throw new ApiRequestException("Invalid old password");
+        }
+        
+        // Encode and save new password
+        String encodedNewPassword = passwordEncoder.encode(changePasswordDTO.getNewPassword());
+        currentUser.setPassword(encodedNewPassword);
+        userRepository.save(currentUser);
+        
+        return ResponseEntity.ok().build();
+    }
+
+    @Operation(summary = "Upload user avatar",
+            parameters = {
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER)
+            },
+            responses = {
+                    @ApiResponse(description = "Avatar uploaded successfully", responseCode = "200")
+            })
+    @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, String>> uploadAvatar(@RequestParam("file") MultipartFile file) {
+        User currentUser = securityContext.getCurrentUser();
+        
+        // For now, save to local uploads folder or return a dummy URL
+        // TODO: Implement proper file storage (S3, local filesystem, etc.)
+        String fileName = "avatar_" + currentUser.getId() + "_" + System.currentTimeMillis() + 
+                         (file.getOriginalFilename() != null ? 
+                          file.getOriginalFilename().substring(file.getOriginalFilename().lastIndexOf('.')) : ".jpg");
+        
+        // Simple implementation: just update with a URL pattern
+        // In production, you'd save the file and return the actual URL
+        String avatarUrl = "/uploads/avatars/" + fileName;
+        
+        currentUser.setPfp(avatarUrl);
+        userRepository.save(currentUser);
+        
+        return ResponseEntity.ok(Map.of("avatarUrl", avatarUrl));
     }
 
 
