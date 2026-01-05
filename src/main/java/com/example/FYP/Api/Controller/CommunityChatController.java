@@ -53,10 +53,17 @@ public class CommunityChatController {
         entity.setCommunity(community);
         entity.setSender(sender);
         entity.setContent(payload.getContent());
-        entity.setSentAt(LocalDateTime.now());
-        messageRepository.save(entity);
+        LocalDateTime now = LocalDateTime.now();
+        entity.setSentAt(now);
+        CommunityMessage saved = messageRepository.save(entity);
 
-        // Return safe DTO
-        return new CommunityMessageDTO(payload.getContent(), sender.getUsername());
+        // Return DTO with full details for WebSocket broadcast
+        CommunityMessageDTO dto = new CommunityMessageDTO();
+        dto.setId(saved.getId());
+        dto.setContent(saved.getContent());
+        dto.setSenderUsername(sender.getUsername());
+        dto.setSenderId(sender.getId());
+        dto.setSentAt(now.format(java.time.format.DateTimeFormatter.ISO_DATE_TIME));
+        return dto;
     }
 }

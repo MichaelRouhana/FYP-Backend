@@ -8,6 +8,15 @@ import lombok.AllArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CommunityMessageDTO {
+    private Long id; // For REST API responses (message history)
     private String content;
     private String senderUsername;
+    private String sentAt; // ISO date string for frontend
+    private Long senderId; // Optional, for frontend reference
+    
+    // Constructor for WebSocket (backward compatibility)
+    public CommunityMessageDTO(String content, String senderUsername) {
+        this.content = content;
+        this.senderUsername = senderUsername;
+    }
 }

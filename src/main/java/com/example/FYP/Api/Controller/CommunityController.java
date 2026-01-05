@@ -6,8 +6,11 @@ import com.example.FYP.Api.Model.Constant.CommunityRoles;
 import com.example.FYP.Api.Model.Filter.CommunityFilterDTO;
 import com.example.FYP.Api.Model.Patch.CommunityPatchDTO;
 import com.example.FYP.Api.Model.Request.CommunityRequestDTO;
+import com.example.FYP.Api.Model.CommunityMessageDTO;
 import com.example.FYP.Api.Model.Response.CommunityResponseDTO;
 import com.example.FYP.Api.Model.View.CommunityViewDTO;
+import com.example.FYP.Api.Messaging.WebSocket.CommunityMessage;
+import com.example.FYP.Api.Repository.CommunityMessageRepository;
 import com.example.FYP.Api.Service.CommunityService;
 import com.example.FYP.Api.Util.PagedResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,7 +28,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/communities")
@@ -36,6 +41,10 @@ public class  CommunityController {
 
     @Autowired
     private CommunityService communityService;
+
+    // 1. Inject the Message Repository
+    @Autowired
+    private CommunityMessageRepository messageRepository;
 
 
 
@@ -285,5 +294,34 @@ public class  CommunityController {
                                       @RequestBody @Valid CommunityPatchDTO communityPatchDTO) {
         communityService.patch(communityId, communityPatchDTO);
         return ResponseEntity.ok().build();
+    }
+
+    // 2. Add this NEW Endpoint
+    @Operation(summary = "Get community messages",
+            parameters = {
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token",
+                            required = true,
+                            in = ParameterIn.HEADER)
+            })
+    @GetMapping("/{communityId}/messages")
+    public ResponseEntity<List<CommunityMessageDTO>> getMessages(@PathVariable Long communityId) {
+        List<CommunityMessage> messages = messageRepository.findByCommunityIdOrderBySentAtAsc(communityId);
+        
+        // Convert Database Entities to DTOs for the frontend
+        DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
+        List<CommunityMessageDTO> dtos = messages.stream()
+                .map(msg -> {
+                    CommunityMessageDTO dto = new CommunityMessageDTO();
+                    dto.setId(msg.getId());
+                    dto.setContent(msg.getContent());
+                    dto.setSenderUsername(msg.getSender().getUsername());
+                    dto.setSenderId(msg.getSender().getId());
+                    dto.setSentAt(msg.getSentAt() != null ? msg.getSentAt().format(formatter) : null);
+                    return dto;
+                })
+                .collect(Collectors.toList());
+        
+        return ResponseEntity.ok(dtos);
     }
 }
