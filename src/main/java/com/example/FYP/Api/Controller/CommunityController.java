@@ -10,7 +10,9 @@ import com.example.FYP.Api.Model.CommunityMessageDTO;
 import com.example.FYP.Api.Model.Response.CommunityResponseDTO;
 import com.example.FYP.Api.Model.View.CommunityViewDTO;
 import com.example.FYP.Api.Messaging.WebSocket.CommunityMessage;
+import com.example.FYP.Api.Entity.User;
 import com.example.FYP.Api.Repository.CommunityMessageRepository;
+import com.example.FYP.Api.Security.SecurityContext;
 import com.example.FYP.Api.Service.CommunityService;
 import com.example.FYP.Api.Util.PagedResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,6 +47,9 @@ public class  CommunityController {
     // 1. Inject the Message Repository
     @Autowired
     private CommunityMessageRepository messageRepository;
+
+    @Autowired
+    private SecurityContext securityContext;
 
 
 
@@ -245,6 +250,25 @@ public class  CommunityController {
     public ResponseEntity<PagedResponse<CommunityResponseDTO>> getAll(Pageable pageable,
                                                                       CommunityFilterDTO filter) {
         return ResponseEntity.ok(communityService.getAll(pageable, filter));
+    }
+
+    @Operation(summary = "Get user's joined communities",
+            parameters = {
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER)
+            },
+            responses = {
+                    @ApiResponse(description = "User's joined communities retrieved", responseCode = "200",
+                            content = @Content(mediaType = "application/json",
+                                    schema = @Schema(implementation = CommunityResponseDTO.class)))
+            })
+    @GetMapping("/my")
+    public ResponseEntity<List<CommunityResponseDTO>> getMyCommunities() {
+        User currentUser = securityContext.getCurrentUser();
+        List<CommunityResponseDTO> communities = communityService.getJoinedCommunities(currentUser.getId());
+        return ResponseEntity.ok(communities);
     }
 
 

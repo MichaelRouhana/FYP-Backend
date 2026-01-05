@@ -182,6 +182,13 @@ public class CommunityService {
         }
     }
 
+    public List<CommunityResponseDTO> getJoinedCommunities(Long userId) {
+        List<Community> communities = communityRepository.findByUsers_Id(userId);
+        return communities.stream()
+                .map(this::mapToDTO)
+                .toList();
+    }
+
     private CommunityResponseDTO mapToDTO(Community community) {
         return CommunityResponseDTO.builder()
                 .id(community.getId())
