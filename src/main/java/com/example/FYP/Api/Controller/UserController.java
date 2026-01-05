@@ -7,8 +7,10 @@ import com.example.FYP.Api.Model.Filter.UserFilterDTO;
 import com.example.FYP.Api.Model.Request.LoginRequestDTO;
 import com.example.FYP.Api.Model.Request.SignUpRequestDTO;
 import com.example.FYP.Api.Model.Response.JwtResponseDTO;
+import com.example.FYP.Api.Entity.BetStatus;
 import com.example.FYP.Api.Model.View.CommunityViewDTO;
 import com.example.FYP.Api.Model.View.UserViewDTO;
+import com.example.FYP.Api.Repository.BetRepository;
 import com.example.FYP.Api.Repository.UserRepository;
 import com.example.FYP.Api.Security.SecurityContext;
 import com.example.FYP.Api.Service.UserService;
@@ -47,6 +49,7 @@ public class UserController {
 
     private final UserService userService;
     private final SecurityContext securityContext;
+    private final BetRepository betRepository;
 
     @Operation(summary = "login user", responses = {
             @ApiResponse(description = "User found", responseCode = "200",
@@ -154,6 +157,45 @@ public class UserController {
     @GetMapping("/communities")
     public ResponseEntity<List<CommunityViewDTO>> getOrganizationUsers() {
         return ResponseEntity.ok(userService.getCommunities());
+    }
+
+    @Operation(summary = "Get user profile with statistics",
+            parameters = {
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER)
+            },
+            responses = {
+                    @ApiResponse(description = "User profile retrieved successfully", responseCode = "200",
+                            content = @Content(mediaType = "application/json",
+                                    schema = @Schema(implementation = UserViewDTO.class)))
+            })
+    @GetMapping("/profile")
+    public ResponseEntity<UserViewDTO> getProfile() {
+        User currentUser = securityContext.getCurrentUser();
+        
+        // Calculate betting statistics
+        long totalBets = betRepository.countByUserId(currentUser.getId());
+        long totalWins = betRepository.countByUserIdAndStatus(currentUser.getId(), BetStatus.WON);
+        
+        // Calculate win rate (percentage)
+        double winRate = totalBets > 0 ? (double) totalWins / totalBets * 100.0 : 0.0;
+        
+        // Build UserViewDTO with profile data
+        UserViewDTO profileDTO = new UserViewDTO();
+        profileDTO.setUsername(currentUser.getUsername());
+        profileDTO.setEmail(currentUser.getEmail());
+        profileDTO.setPfp(currentUser.getPfp());
+        profileDTO.setTotalPoints(currentUser.getPoints() != null ? currentUser.getPoints() : 0L);
+        profileDTO.setTotalBets(totalBets);
+        profileDTO.setTotalWins(totalWins);
+        profileDTO.setWinRate(winRate);
+        profileDTO.setRoles(currentUser.getRoles().stream()
+                .map(role -> role.getRole().name())
+                .toList());
+        
+        return ResponseEntity.ok(profileDTO);
     }
 
 

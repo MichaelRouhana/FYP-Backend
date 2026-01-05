@@ -20,4 +20,9 @@ public interface BetRepository extends JpaRepository<Bet, Long>, JpaSpecificatio
     List<Bet> findByUserId(Long userId);
 
     List<Bet> findByMarketType(MarketType marketType);
+
+    // Count methods for profile statistics
+    long countByUserId(Long userId);
+
+    long countByUserIdAndStatus(Long userId, BetStatus status);
 }
