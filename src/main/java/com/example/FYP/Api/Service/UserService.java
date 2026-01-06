@@ -1,5 +1,6 @@
 package com.example.FYP.Api.Service;
 
+import com.example.FYP.Api.Entity.Address;
 import com.example.FYP.Api.Entity.Organization;
 import com.example.FYP.Api.Entity.User;
 import com.example.FYP.Api.Entity.UserRole;
