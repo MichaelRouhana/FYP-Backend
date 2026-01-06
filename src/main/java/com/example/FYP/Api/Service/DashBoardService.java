@@ -88,7 +88,14 @@ public class DashBoardService {
     public List<UserViewDTO> getUsers() {
         return userRepository.findAll()
                 .stream()
-                .map(u -> modelMapper.map(u, UserViewDTO.class))
+                .map(u -> {
+                    UserViewDTO dto = modelMapper.map(u, UserViewDTO.class);
+                    // Explicitly map points to totalPoints since field names differ
+                    if (dto.getTotalPoints() == null && u.getPoints() != null) {
+                        dto.setTotalPoints(u.getPoints());
+                    }
+                    return dto;
+                })
                 .toList();
     }
 
