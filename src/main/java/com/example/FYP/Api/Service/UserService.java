@@ -143,17 +143,30 @@ public class UserService {
         String country = signUpRequestDTO.getCountry();
         System.out.println("🌍 Signup - Country received: " + country);
         
-        User user = userRepository.save(User.builder().email(email)
+        // Build user with country
+        User.UserBuilder userBuilder = User.builder()
+                .email(email)
                 .password(encodedPassword)
                 .username(signUpRequestDTO.getUsername())
                 .pfp("/dummy/url")
-                .country(country) // Save country from signup
                 .roles(roles)
                 .isVerified(true) // Auto-verify for development
-                .communityRoles(new HashSet<>())
-                .build());
+                .communityRoles(new HashSet<>());
         
-        System.out.println("🌍 Signup - Country saved to user: " + user.getCountry());
+        // Set country in Address if provided
+        if (country != null && !country.trim().isEmpty()) {
+            Address address = new Address();
+            address.setCountry(country);
+            userBuilder.address(address);
+            userBuilder.country(country); // Also set direct field for backward compatibility
+            System.out.println("🌍 Signup - Creating Address with country: " + country);
+        }
+        
+        User user = userRepository.save(userBuilder.build());
+        
+        System.out.println("🌍 Signup - Country saved to user:");
+        System.out.println("   - Direct field: " + user.getCountry());
+        System.out.println("   - Address field: " + (user.getAddress() != null ? user.getAddress().getCountry() : "null"));
 
         VerificationToken token = VerificationToken.builder()
                 .token(UUID.randomUUID().toString())

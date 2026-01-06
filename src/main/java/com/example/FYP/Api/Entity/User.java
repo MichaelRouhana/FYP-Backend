@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 
+import com.example.FYP.Api.Entity.Address;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -65,8 +66,11 @@ public class User extends AuditableEntity{
     @Column(name = "about", length = 1000)
     private String about; // User's bio/about section
 
+    @Embedded
+    private Address address; // User's address (includes country)
+
     @Column(name = "country", length = 100)
-    private String country; // User's country from signup
+    private String country; // User's country from signup (for backward compatibility)
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "user_roles",

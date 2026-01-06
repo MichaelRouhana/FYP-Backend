@@ -204,8 +204,16 @@ public class UserController {
         profileDTO.setWinRate(winRate);
         profileDTO.setAbout(currentUser.getAbout()); // Include about field
         
-        String country = currentUser.getCountry();
-        System.out.println("🌍 Profile - User country from DB: " + country);
+        // Get country from Address first, fallback to direct field
+        String country = null;
+        if (currentUser.getAddress() != null && currentUser.getAddress().getCountry() != null) {
+            country = currentUser.getAddress().getCountry();
+            System.out.println("🌍 Profile - Country from Address: " + country);
+        } else if (currentUser.getCountry() != null) {
+            country = currentUser.getCountry();
+            System.out.println("🌍 Profile - Country from direct field: " + country);
+        }
+        
         profileDTO.setCountry(country); // Include country from User entity
         System.out.println("🌍 Profile - DTO country set to: " + profileDTO.getCountry());
         
