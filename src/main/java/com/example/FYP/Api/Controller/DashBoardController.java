@@ -2,6 +2,7 @@ package com.example.FYP.Api.Controller;
 
 
 import com.example.FYP.Api.Loader.Annotation.Feature;
+import com.example.FYP.Api.Model.View.LogViewDTO;
 import com.example.FYP.Api.Service.DashBoardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -14,6 +15,8 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/dashboard")
@@ -79,7 +82,7 @@ public class  DashBoardController {
 
             })
     @GetMapping("/logs")
-    public ResponseEntity<?> getLogs() {
+    public ResponseEntity<List<LogViewDTO>> getLogs() {
         return ResponseEntity.ok(dashboardService.getLogs());
     }
 
