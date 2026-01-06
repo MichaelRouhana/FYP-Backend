@@ -159,15 +159,12 @@ public class UserService {
             Address address = new Address();
             address.setCountry(country);
             userBuilder.address(address);
-            userBuilder.country(country); // Also set direct field for backward compatibility
             System.out.println("🌍 Signup - Creating Address with country: " + country);
         }
         
         User user = userRepository.save(userBuilder.build());
         
-        System.out.println("🌍 Signup - Country saved to user:");
-        System.out.println("   - Direct field: " + user.getCountry());
-        System.out.println("   - Address field: " + (user.getAddress() != null ? user.getAddress().getCountry() : "null"));
+        System.out.println("🌍 Signup - Country saved to Address: " + (user.getAddress() != null ? user.getAddress().getCountry() : "null"));
 
         VerificationToken token = VerificationToken.builder()
                 .token(UUID.randomUUID().toString())

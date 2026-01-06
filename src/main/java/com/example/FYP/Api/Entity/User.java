@@ -70,9 +70,6 @@ public class User extends AuditableEntity{
     @AttributeOverride(name = "country", column = @Column(name = "address_country", length = 100))
     private Address address; // User's address (includes country)
 
-    @Column(name = "country", length = 100)
-    private String country; // User's country from signup (for backward compatibility)
-
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "user_roles",
             joinColumns = @JoinColumn(name = "user_id"),
