@@ -36,6 +36,7 @@ public class FixtureResolveJob {
      * MAIN RESOLVE JOB: Finds ALL matches where status is NOT finished 
      * but the scheduled start time has already passed.
      * Fetches fresh status by Match ID (bypasses stale bulk sync).
+     * Also checks for finished fixtures with pending bets (retry logic).
      * Runs every 15 seconds.
      */
     @Scheduled(fixedDelay = 15000) // every 15 seconds
@@ -43,6 +44,21 @@ public class FixtureResolveJob {
     @Transactional
     public void resolveFinishedFixtures() {
         try {
+            // First, check for finished fixtures with pending bets (retry logic)
+            // This ensures we retry resolution for any missed bets from previous runs
+            List<Fixture> finishedWithPendingBets = fixtureRepository.findFinishedFixturesWithPendingBets();
+            if (!finishedWithPendingBets.isEmpty()) {
+                log.info("Found {} finished fixtures with pending bets, retrying resolution", finishedWithPendingBets.size());
+            }
+            for (Fixture fixture : finishedWithPendingBets) {
+                try {
+                    log.info("Retrying bet resolution for finished fixture {} with pending bets", fixture.getId());
+                    betResolverService.resolveBetsForFixture(fixture);
+                } catch (Exception e) {
+                    log.error("Failed to resolve bets for finished fixture {}: {}", fixture.getId(), e.getMessage(), e);
+                }
+            }
+
             // Find ALL fixtures that are not yet marked as finished
             List<Fixture> unfinishedFixtures = fixtureRepository.findAllUnfinishedFixtures();
             

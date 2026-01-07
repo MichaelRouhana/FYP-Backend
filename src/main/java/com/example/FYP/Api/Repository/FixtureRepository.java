@@ -49,4 +49,17 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long>, JpaSpec
             "f.raw_json NOT LIKE '%\"short\":\"WO\"%'",
             nativeQuery = true)
     List<Fixture> findAllUnfinishedFixtures();
+
+    /**
+     * Finds fixtures that are finished (FT, AET, PEN) AND have pending bets.
+     * This ensures we retry resolution for any missed bets.
+     */
+    @Query(value = "SELECT DISTINCT f.* FROM fixtures f " +
+            "INNER JOIN bet b ON b.fixture_id = f.id " +
+            "WHERE b.status = 'PENDING' " +
+            "AND (f.raw_json LIKE '%\"short\":\"FT\"%' OR " +
+            "     f.raw_json LIKE '%\"short\":\"AET\"%' OR " +
+            "     f.raw_json LIKE '%\"short\":\"PEN\"%')",
+            nativeQuery = true)
+    List<Fixture> findFinishedFixturesWithPendingBets();
 }
