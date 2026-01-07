@@ -67,6 +67,22 @@ public class  BetController {
         return ResponseEntity.ok(betService.getAll(pageable, filter));
     }
 
+    @Operation(summary = "retrieve bet by id",
+            parameters = {
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER)
+            },
+            responses = {
+                    @ApiResponse(description = "bet retrieved Successfully!", responseCode = "200", content = @Content(mediaType = "application/json",
+                            schema = @Schema(implementation = BetResponseDTO.class)))
+            })
+    @GetMapping("/{id}")
+    public ResponseEntity<BetResponseDTO> getBetById(@PathVariable Long id) {
+        return ResponseEntity.ok(betService.getBetById(id));
+    }
+
     @Operation(summary = "Manually trigger bet resolution for a specific fixture (Admin only)",
             parameters = {
                     @Parameter(name = "Authorization",

@@ -24,6 +24,7 @@ import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -135,6 +136,45 @@ public class BetService {
         response.setStatus(BetStatus.PENDING); // Overall status is PENDING until all legs are resolved
         response.setLegs(legResponses);
         
+        // Map fixture details from the first leg's fixture (for main display)
+        if (!bets.isEmpty() && bets.get(0).getFixture() != null) {
+            Fixture firstFixture = bets.get(0).getFixture();
+            response.setHomeTeam(firstFixture.getHomeTeamName());
+            response.setAwayTeam(firstFixture.getAwayTeamName());
+            response.setHomeTeamLogo(firstFixture.getHomeTeamLogo());
+            response.setAwayTeamLogo(firstFixture.getAwayTeamLogo());
+            response.setMatchStatus(firstFixture.getStatusShort());
+            
+            // Map scores from goals
+            Map<String, Integer> goals = firstFixture.getGoals();
+            if (goals != null) {
+                response.setHomeScore(goals.get("home"));
+                response.setAwayScore(goals.get("away"));
+            }
+            
+            // Map match date from fixture date
+            String dateStr = firstFixture.getFixtureDate();
+            if (dateStr != null && !dateStr.isEmpty()) {
+                try {
+                    // Parse ISO 8601 format: "2024-01-15T20:00:00+00:00" or "2024-01-15T20:00:00Z"
+                    // Remove timezone info and parse as LocalDateTime
+                    String normalizedDate = dateStr.replace("Z", "");
+                    if (normalizedDate.contains("+")) {
+                        normalizedDate = normalizedDate.substring(0, normalizedDate.indexOf('+'));
+                    } else if (normalizedDate.contains("-") && normalizedDate.lastIndexOf('-') > 10) {
+                        // Check if there's a timezone offset (last '-' after the date part)
+                        int lastDash = normalizedDate.lastIndexOf('-');
+                        if (lastDash > 10) {
+                            normalizedDate = normalizedDate.substring(0, lastDash - 3); // Remove "-00:00"
+                        }
+                    }
+                    response.setMatchDate(LocalDateTime.parse(normalizedDate));
+                } catch (Exception e) {
+                    log.warn("Failed to parse match date for fixture {}: {}", firstFixture.getId(), dateStr, e);
+                }
+            }
+        }
+        
         return response;
     }
 
@@ -202,5 +242,116 @@ public class BetService {
         });
 
         return PagedResponse.fromPage(accountResponsePage);
+    }
+
+    public BetResponseDTO getBetById(Long id) {
+        // Get current user to ensure they can only access their own bets
+        User currentUser = securityContext.getCurrentUser();
+        
+        // Find the bet by ID
+        Bet bet = betRepository.findById(id)
+                .orElseThrow(() -> new ApiRequestException(HttpStatus.NOT_FOUND, "Bet not found with id: " + id));
+        
+        // Verify the bet belongs to the current user
+        if (!bet.getUser().getId().equals(currentUser.getId())) {
+            throw ApiRequestException.badRequest("You do not have access to this bet");
+        }
+        
+        // For accumulator bets, we need to find all legs with the same stake and created within 2 seconds
+        // For simplicity, we'll query for bets with the same user, stake, and created date within a 2-second window
+        List<Bet> allBets = betRepository.findByUserId(currentUser.getId());
+        List<Bet> accumulatorBets = allBets.stream()
+                .filter(b -> b.getStake().equals(bet.getStake()) &&
+                        b.getCreatedDate() != null &&
+                        bet.getCreatedDate() != null &&
+                        Math.abs(java.time.Duration.between(b.getCreatedDate(), bet.getCreatedDate()).getSeconds()) <= 2)
+                .toList();
+        
+        // Use accumulator bets if found, otherwise use just this bet
+        List<Bet> betsToReturn = accumulatorBets.size() > 1 ? accumulatorBets : List.of(bet);
+        
+        // Build response similar to create() method
+        BigDecimal totalOdds = BigDecimal.ONE;
+        for (Bet b : betsToReturn) {
+            if (b.getOdd() != null) {
+                totalOdds = totalOdds.multiply(b.getOdd());
+            }
+        }
+        
+        BigDecimal potentialWinnings = BigDecimal.valueOf(bet.getStake()).multiply(totalOdds);
+        
+        // Build leg responses
+        List<BetLegResponseDTO> legResponses = new ArrayList<>();
+        for (Bet b : betsToReturn) {
+            BetLegResponseDTO legResponse = new BetLegResponseDTO();
+            legResponse.setId(b.getId());
+            legResponse.setFixtureId(b.getFixture().getId());
+            legResponse.setMarketType(b.getMarketType());
+            legResponse.setSelection(b.getSelection());
+            legResponse.setOdd(b.getOdd());
+            legResponse.setStatus(b.getStatus());
+            legResponses.add(legResponse);
+        }
+        
+        // Build response
+        BetResponseDTO response = new BetResponseDTO();
+        response.setId(bet.getId());
+        response.setStake(bet.getStake());
+        response.setTotalOdds(totalOdds);
+        response.setPotentialWinnings(potentialWinnings);
+        
+        // Determine overall status: if all legs are won, status is WON; if any is lost, status is LOST; otherwise PENDING
+        boolean allWon = betsToReturn.stream().allMatch(b -> b.getStatus() == BetStatus.WON);
+        boolean anyLost = betsToReturn.stream().anyMatch(b -> b.getStatus() == BetStatus.LOST);
+        if (allWon) {
+            response.setStatus(BetStatus.WON);
+        } else if (anyLost) {
+            response.setStatus(BetStatus.LOST);
+        } else {
+            response.setStatus(BetStatus.PENDING);
+        }
+        
+        response.setLegs(legResponses);
+        
+        // Map fixture details from the first leg's fixture (for main display)
+        if (!betsToReturn.isEmpty() && betsToReturn.get(0).getFixture() != null) {
+            Fixture firstFixture = betsToReturn.get(0).getFixture();
+            response.setHomeTeam(firstFixture.getHomeTeamName());
+            response.setAwayTeam(firstFixture.getAwayTeamName());
+            response.setHomeTeamLogo(firstFixture.getHomeTeamLogo());
+            response.setAwayTeamLogo(firstFixture.getAwayTeamLogo());
+            response.setMatchStatus(firstFixture.getStatusShort());
+            
+            // Map scores from goals
+            Map<String, Integer> goals = firstFixture.getGoals();
+            if (goals != null) {
+                response.setHomeScore(goals.get("home"));
+                response.setAwayScore(goals.get("away"));
+            }
+            
+            // Map match date from fixture date
+            String dateStr = firstFixture.getFixtureDate();
+            if (dateStr != null && !dateStr.isEmpty()) {
+                try {
+                    // Parse ISO 8601 format: "2024-01-15T20:00:00+00:00" or "2024-01-15T20:00:00Z"
+                    // Remove timezone info and parse as LocalDateTime
+                    String normalizedDate = dateStr.replace("Z", "");
+                    if (normalizedDate.contains("+")) {
+                        normalizedDate = normalizedDate.substring(0, normalizedDate.indexOf('+'));
+                    } else if (normalizedDate.contains("-") && normalizedDate.lastIndexOf('-') > 10) {
+                        // Check if there's a timezone offset (last '-' after the date part)
+                        int lastDash = normalizedDate.lastIndexOf('-');
+                        if (lastDash > 10) {
+                            normalizedDate = normalizedDate.substring(0, lastDash - 3); // Remove "-00:00"
+                        }
+                    }
+                    response.setMatchDate(LocalDateTime.parse(normalizedDate));
+                } catch (Exception e) {
+                    log.warn("Failed to parse match date for fixture {}: {}", firstFixture.getId(), dateStr, e);
+                }
+            }
+        }
+        
+        return response;
     }
 }
