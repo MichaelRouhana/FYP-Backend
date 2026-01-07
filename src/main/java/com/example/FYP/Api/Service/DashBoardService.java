@@ -5,6 +5,7 @@ import com.example.FYP.Api.Entity.Bet;
 import com.example.FYP.Api.Entity.BetStatus;
 import com.example.FYP.Api.Entity.User;
 import com.example.FYP.Api.Model.ChartPoint;
+import com.example.FYP.Api.Model.View.DashboardStatsDTO;
 import com.example.FYP.Api.Model.View.LogViewDTO;
 import com.example.FYP.Api.Model.View.UserViewDTO;
 import com.example.FYP.Api.Repository.AuditLogRepository;
@@ -111,6 +112,32 @@ public class DashBoardService {
                 .stream()
                 .map(u -> modelMapper.map(u, UserViewDTO.class))
                 .toList();
+    }
+
+    public DashboardStatsDTO getDashboardStats(String timeRange) {
+        // 1. Determine the Date Threshold
+        java.time.LocalDateTime threshold;
+
+        if ("24h".equalsIgnoreCase(timeRange)) {
+            threshold = java.time.LocalDateTime.now().minusHours(24);
+        } else if ("7d".equalsIgnoreCase(timeRange)) {
+            threshold = java.time.LocalDateTime.now().minusDays(7);
+        } else {
+            // Default "All Time" (or set a very old date)
+            // For All Time, we can use the simpler count() methods
+            return DashboardStatsDTO.builder()
+                    .totalBets(betRepository.count())
+                    .wonBets(betRepository.countByStatus(BetStatus.WON))
+                    .lostBets(betRepository.countByStatus(BetStatus.LOST))
+                    .build();
+        }
+
+        // 2. Return filtered counts
+        return DashboardStatsDTO.builder()
+                .totalBets(betRepository.countByCreatedDateAfter(threshold))
+                .wonBets(betRepository.countByStatusAndCreatedDateAfter(BetStatus.WON, threshold))
+                .lostBets(betRepository.countByStatusAndCreatedDateAfter(BetStatus.LOST, threshold))
+                .build();
     }
 
     private List<ChartPoint> usersPerDate(List<User> users) {

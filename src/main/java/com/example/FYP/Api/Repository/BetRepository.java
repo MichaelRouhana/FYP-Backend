@@ -25,4 +25,11 @@ public interface BetRepository extends JpaRepository<Bet, Long>, JpaSpecificatio
     long countByUserId(Long userId);
 
     long countByUserIdAndStatus(Long userId, BetStatus status);
+
+    // Count methods for dashboard statistics
+    long countByStatus(BetStatus status);
+
+    // Count methods with date filtering for time range support
+    long countByCreatedDateAfter(java.time.LocalDateTime date);
+    long countByStatusAndCreatedDateAfter(BetStatus status, java.time.LocalDateTime date);
 }

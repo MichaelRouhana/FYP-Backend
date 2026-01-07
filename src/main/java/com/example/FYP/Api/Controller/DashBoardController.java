@@ -14,6 +14,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -156,6 +157,22 @@ public class  DashBoardController {
     @GetMapping("/topPointers")
     public ResponseEntity<?> getTopPointers() {
         return ResponseEntity.ok(dashboardService.getTopPointers());
+    }
+
+    @Operation(summary = "retrieve high-level dashboard stats with optional time range filter",
+            parameters = {
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER),
+                    @Parameter(name = "range",
+                            description = "Time range filter: '24h', '7d', or 'all' (default: 'all')",
+                            required = false,
+                            in = ParameterIn.QUERY)
+            })
+    @GetMapping("/stats")
+    public ResponseEntity<?> getDashboardStats(@RequestParam(required = false, defaultValue = "all") String range) {
+        return ResponseEntity.ok(dashboardService.getDashboardStats(range));
     }
 
 
