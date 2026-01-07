@@ -19,4 +19,15 @@ public class BetViewAllDTO {
     private String status;
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdDate; // For grouping accumulator bets
+    
+    // Fixture details
+    private String homeTeam;
+    private String awayTeam;
+    private String homeTeamLogo;
+    private String awayTeamLogo;
+    private Integer homeScore;
+    private Integer awayScore;
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private LocalDateTime matchDate;
+    private String matchStatus; // e.g., "FT", "NS", "LIVE"
 }

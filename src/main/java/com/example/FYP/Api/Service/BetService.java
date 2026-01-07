@@ -28,8 +28,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Slf4j
@@ -152,7 +155,44 @@ public class BetService {
             BetViewAllDTO dto = modelMapper.map(bet, BetViewAllDTO.class);
             // Manually set fixtureId since ModelMapper might not map nested fields automatically
             if (bet.getFixture() != null) {
-                dto.setFixtureId(bet.getFixture().getId());
+                Fixture fixture = bet.getFixture();
+                dto.setFixtureId(fixture.getId());
+                
+                // Map fixture details
+                dto.setHomeTeam(fixture.getHomeTeamName());
+                dto.setAwayTeam(fixture.getAwayTeamName());
+                dto.setHomeTeamLogo(fixture.getHomeTeamLogo());
+                dto.setAwayTeamLogo(fixture.getAwayTeamLogo());
+                dto.setMatchStatus(fixture.getStatusShort());
+                
+                // Map scores from goals
+                Map<String, Integer> goals = fixture.getGoals();
+                if (goals != null) {
+                    dto.setHomeScore(goals.get("home"));
+                    dto.setAwayScore(goals.get("away"));
+                }
+                
+                // Map match date from fixture date
+                String dateStr = fixture.getFixtureDate();
+                if (dateStr != null && !dateStr.isEmpty()) {
+                    try {
+                        // Parse ISO 8601 format: "2024-01-15T20:00:00+00:00" or "2024-01-15T20:00:00Z"
+                        // Remove timezone info and parse as LocalDateTime
+                        String normalizedDate = dateStr.replace("Z", "");
+                        if (normalizedDate.contains("+")) {
+                            normalizedDate = normalizedDate.substring(0, normalizedDate.indexOf('+'));
+                        } else if (normalizedDate.contains("-") && normalizedDate.lastIndexOf('-') > 10) {
+                            // Check if there's a timezone offset (last '-' after the date part)
+                            int lastDash = normalizedDate.lastIndexOf('-');
+                            if (lastDash > 10) {
+                                normalizedDate = normalizedDate.substring(0, lastDash - 3); // Remove "-00:00"
+                            }
+                        }
+                        dto.setMatchDate(LocalDateTime.parse(normalizedDate));
+                    } catch (Exception e) {
+                        log.warn("Failed to parse match date for fixture {}: {}", fixture.getId(), dateStr, e);
+                    }
+                }
             }
             // Set createdDate for grouping accumulator bets
             if (bet.getCreatedDate() != null) {

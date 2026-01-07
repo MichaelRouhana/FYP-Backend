@@ -102,6 +102,21 @@ public class Fixture extends AuditableEntity{
         return getLong("fixture.id");
     }
 
+    /** Returns home team logo URL */
+    public String getHomeTeamLogo() {
+        return getString("teams.home.logo");
+    }
+
+    /** Returns away team logo URL */
+    public String getAwayTeamLogo() {
+        return getString("teams.away.logo");
+    }
+
+    /** Returns fixture date as ISO string (e.g., "2024-01-15T20:00:00+00:00") */
+    public String getFixtureDate() {
+        return getString("fixture.date");
+    }
+
     /** Generic helper methods to parse JSON paths safely */
     private String getString(String path) {
         try {
