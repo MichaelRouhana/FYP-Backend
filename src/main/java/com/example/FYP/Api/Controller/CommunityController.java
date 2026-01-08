@@ -7,6 +7,7 @@ import com.example.FYP.Api.Model.Constant.CommunityRoles;
 import com.example.FYP.Api.Model.Filter.CommunityFilterDTO;
 import com.example.FYP.Api.Model.Patch.CommunityPatchDTO;
 import com.example.FYP.Api.Model.Request.CommunityRequestDTO;
+import com.example.FYP.Api.Model.Request.JoinCommunityRequestDTO;
 import com.example.FYP.Api.Model.CommunityMessageDTO;
 import com.example.FYP.Api.Model.Response.CommunityResponseDTO;
 import com.example.FYP.Api.Model.View.CommunityViewDTO;
@@ -219,7 +220,7 @@ public class  CommunityController {
                     @ApiResponse(description = "Already a member", responseCode = "400")
             })
     @PostMapping("/join")
-    public ResponseEntity<Map<String, String>> joinCommunity(@RequestBody @Valid com.example.FYP.Api.Model.Request.InvitationRequestDTO request) {
+    public ResponseEntity<Map<String, String>> joinCommunity(@RequestBody @Valid JoinCommunityRequestDTO request) {
         User currentUser = securityContext.getCurrentUser();
         
         if (request.getInviteCode() == null || request.getInviteCode().trim().isEmpty()) {
