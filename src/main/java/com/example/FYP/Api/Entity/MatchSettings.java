@@ -19,11 +19,14 @@ public class MatchSettings {
     private Long id;
 
     @Column(nullable = false)
-    private Boolean allowBettingHT;
+    @Builder.Default
+    private Boolean allowBettingHT = false;
 
     @Column(nullable = false)
-    private Boolean showMatch;
+    @Builder.Default
+    private Boolean showMatch = false;
 
     @Column(nullable = false)
-    private Boolean allowBetting;
+    @Builder.Default
+    private Boolean allowBetting = false;
 }

@@ -9,6 +9,7 @@ import com.example.FYP.Api.Mapper.FixtureMapper;
 import com.example.FYP.Api.Model.Patch.MatchPredictionSettingsPatchDTO;
 import com.example.FYP.Api.Model.Patch.MatchSettingsPatchDTO;
 import com.example.FYP.Api.Model.View.FixtureViewDTO;
+import com.example.FYP.Api.Model.View.UserBettingOnFixtureDTO;
 import com.example.FYP.Api.Model.View.UserViewDTO;
 import com.example.FYP.Api.Repository.FixtureRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -26,6 +27,7 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -115,7 +117,7 @@ public class FixtureService {
                 .orElseThrow(() -> new EntityNotFoundException("Fixture not found: " + fixtureId));
 
         if (fixture.getMatchSettings() == null) {
-            fixture.setMatchSettings(new MatchSettings());
+            fixture.setMatchSettings(MatchSettings.builder().build());
         }
 
         // Map only non-null fields
@@ -130,7 +132,7 @@ public class FixtureService {
                 .orElseThrow(() -> new EntityNotFoundException("Fixture not found: " + fixtureId));
 
         if (fixture.getMatchPredictionSettings() == null) {
-            fixture.setMatchPredictionSettings(new MatchPredictionSettings());
+            fixture.setMatchPredictionSettings(MatchPredictionSettings.builder().build());
         }
 
         // Map only non-null fields
@@ -144,7 +146,9 @@ public class FixtureService {
         Fixture fixture = fixtureRepository.findById(fixtureId)
                 .orElseThrow(() -> new EntityNotFoundException("Fixture not found: " + fixtureId));
 
-        MatchSettings matchSettings = fixture.getMatchSettings() != null ? fixture.getMatchSettings() : new MatchSettings();
+        MatchSettings matchSettings = fixture.getMatchSettings() != null 
+                ? fixture.getMatchSettings() 
+                : MatchSettings.builder().build();
 
         // Map entity to DTO
         return modelMapper.map(matchSettings, FixtureViewDTO.MatchSettingsView.class);
@@ -156,24 +160,39 @@ public class FixtureService {
 
         MatchPredictionSettings matchPredictionSettings = fixture.getMatchPredictionSettings() != null
                 ? fixture.getMatchPredictionSettings()
-                : new MatchPredictionSettings();
+                : MatchPredictionSettings.builder().build();
 
         // Map entity to DTO
         return modelMapper.map(matchPredictionSettings, FixtureViewDTO.MatchPredictionSettingsView.class);
     }
 
-    public List<UserViewDTO> getUsers(Long fixtureId) {
+    public List<UserBettingOnFixtureDTO> getUsersBettingOnFixture(Long fixtureId) {
         Fixture fixture = fixtureRepository.findById(fixtureId)
                 .orElseThrow(() -> new EntityNotFoundException("Fixture not found: " + fixtureId));
 
-        System.out.println(fixture.getBetsSet().size());
-        Set<User> uniqueUsers = fixture.getBetsSet().stream()
-                .map(Bet::getUser)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+        // Group bets by user and calculate total wagered
+        Map<User, Double> userTotalWagered = fixture.getBetsSet().stream()
+                .filter(bet -> bet.getUser() != null && bet.getStake() != null)
+                .collect(Collectors.groupingBy(
+                        Bet::getUser,
+                        Collectors.summingDouble(Bet::getStake)
+                ));
 
-        return uniqueUsers.stream()
-                .map(user -> modelMapper.map(user, UserViewDTO.class))
+        // Convert to DTOs
+        return userTotalWagered.entrySet().stream()
+                .map(entry -> {
+                    User user = entry.getKey();
+                    Double totalWagered = entry.getValue();
+                    
+                    UserBettingOnFixtureDTO dto = new UserBettingOnFixtureDTO();
+                    dto.setUserId(user.getId());
+                    dto.setUsername(user.getUsername());
+                    dto.setAvatar(user.getPfp());
+                    dto.setTotalWagered(totalWagered);
+                    
+                    return dto;
+                })
+                .sorted((a, b) -> Double.compare(b.getTotalWagered(), a.getTotalWagered())) // Sort by total wagered descending
                 .collect(Collectors.toList());
     }
 }

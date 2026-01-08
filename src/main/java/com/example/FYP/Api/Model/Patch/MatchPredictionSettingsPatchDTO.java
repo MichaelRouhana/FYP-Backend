@@ -14,5 +14,5 @@ public class MatchPredictionSettingsPatchDTO {
     private Boolean doubleChance;
     private Boolean scorePrediction;
     private Boolean whoWillWin;
-
+    private Boolean halfTimeFullTime;
 }

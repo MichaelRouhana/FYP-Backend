@@ -54,14 +54,15 @@ public class FixtureController {
 
 
     @GetMapping("/{fixtureId}/users")
-    public List<UserViewDTO> getUsers(@PathVariable Long fixtureId) {
-        return fixtureService.getUsers(fixtureId);
+    @Operation(summary = "Get users betting on fixture", description = "Returns a list of users who bet on this fixture with their total wagered amount")
+    public List<com.example.FYP.Api.Model.View.UserBettingOnFixtureDTO> getUsersBettingOnFixture(@PathVariable Long fixtureId) {
+        return fixtureService.getUsersBettingOnFixture(fixtureId);
     }
 
 
 
 
-    @Operation(summary = "patch fixture's match prediction settings",
+    @Operation(summary = "Update fixture's match prediction settings",
             parameters = {
                     @Parameter(name = "Authorization",
                             description = "Bearer token for authentication",
@@ -69,14 +70,14 @@ public class FixtureController {
                             in = ParameterIn.HEADER)
 
             })
-    @PatchMapping("/prediction-settings")
-    public ResponseEntity<?> patchMatchPredictionSettings(@RequestParam Long fixtureId,
+    @PatchMapping("/{fixtureId}/prediction-settings")
+    public ResponseEntity<?> patchMatchPredictionSettings(@PathVariable Long fixtureId,
                                                           @RequestBody MatchPredictionSettingsPatchDTO patchDTO) {
         fixtureService.patchMatchPredictionSettings(fixtureId, patchDTO);
         return ResponseEntity.ok().build();
     }
 
-    @Operation(summary = "patch fixture's match prediction settings",
+    @Operation(summary = "Update fixture's match settings",
             parameters = {
                     @Parameter(name = "Authorization",
                             description = "Bearer token for authentication",
@@ -84,8 +85,8 @@ public class FixtureController {
                             in = ParameterIn.HEADER)
 
             })
-    @PatchMapping("/settings")
-    public ResponseEntity<?> patchMatchSettings(@RequestParam Long fixtureId,
+    @PatchMapping("/{fixtureId}/settings")
+    public ResponseEntity<?> patchMatchSettings(@PathVariable Long fixtureId,
                                                 @RequestBody MatchSettingsPatchDTO patchDTO) {
         fixtureService.patchMatchSettings(fixtureId, patchDTO);
         return ResponseEntity.ok().build();

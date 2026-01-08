@@ -103,14 +103,42 @@ public class DashBoardService {
     public List<UserViewDTO> getTopBetters() {
         return userRepository.findTop10UsersByBetCount()
                 .stream()
-                .map(u -> modelMapper.map(u, UserViewDTO.class))
+                .map(user -> {
+                    UserViewDTO dto = modelMapper.map(user, UserViewDTO.class);
+                    
+                    // MANUAL FIX: Count the bets list since ModelMapper won't do this
+                    if (user.getBets() != null) {
+                        dto.setTotalBets((long) user.getBets().size());
+                    } else {
+                        dto.setTotalBets(0L);
+                    }
+                    
+                    // Ensure points are set (map points -> totalPoints)
+                    dto.setTotalPoints(user.getPoints() != null ? user.getPoints() : 0L);
+                    
+                    return dto;
+                })
                 .toList();
     }
 
     public List<UserViewDTO> getTopPointers() {
         return userRepository.findTop10ByOrderByPointsDesc()
                 .stream()
-                .map(u -> modelMapper.map(u, UserViewDTO.class))
+                .map(user -> {
+                    UserViewDTO dto = modelMapper.map(user, UserViewDTO.class);
+                    
+                    // Ensure points are set (map points -> totalPoints)
+                    dto.setTotalPoints(user.getPoints() != null ? user.getPoints() : 0L);
+                    
+                    // Also set totalBets for consistency
+                    if (user.getBets() != null) {
+                        dto.setTotalBets((long) user.getBets().size());
+                    } else {
+                        dto.setTotalBets(0L);
+                    }
+                    
+                    return dto;
+                })
                 .toList();
     }
 

@@ -56,8 +56,6 @@ public class SecurityConfig implements WebMvcConfigurer {
                         .requestMatchers("/users/login", "/users/signup", "/users/verify", "/users/login/google").permitAll()
                         // WebSocket endpoints - must be permitted for upgrade request
                         .requestMatchers("/ws", "/ws/**", "/ws/sockjs/**", "/api/v1/ws/**").permitAll()
-                        // Allow public access to uploaded files
-                        .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers("/txn/**",
                                 "/bets/**",
                                 "/dashboard/**",
@@ -80,15 +78,7 @@ public class SecurityConfig implements WebMvcConfigurer {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Allow localhost for web development (Expo web typically runs on 8081)
-        // Also allow the local IP for native devices and other web ports
-        configuration.setAllowedOriginPatterns(Arrays.asList(
-            "http://localhost:*",
-            "http://127.0.0.1:*",
-            "http://192.168.*.*:*",
-            "http://172.*.*.*:*",
-            "http://10.*.*.*:*"
-        ));
+        configuration.setAllowedOrigins(List.of("http://127.0.0.1:5500"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Cache-Control", "Content-Type"));
         configuration.setExposedHeaders(List.of("Authorization"));

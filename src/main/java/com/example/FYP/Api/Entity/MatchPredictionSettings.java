@@ -19,20 +19,30 @@ public class MatchPredictionSettings {
     private Long id;
 
     @Column(nullable = false)
-    private Boolean goalsOverUnder;
+    @Builder.Default
+    private Boolean goalsOverUnder = true;
 
     @Column(nullable = false)
-    private Boolean bothTeamsScore;
+    @Builder.Default
+    private Boolean bothTeamsScore = true;
 
     @Column(nullable = false)
-    private Boolean firstTeamToScore;
+    @Builder.Default
+    private Boolean firstTeamToScore = true;
 
     @Column(nullable = false)
-    private Boolean doubleChance;
+    @Builder.Default
+    private Boolean doubleChance = true;
 
     @Column(nullable = false)
-    private Boolean scorePrediction;
+    @Builder.Default
+    private Boolean scorePrediction = true;
 
     @Column(nullable = false)
-    private Boolean whoWillWin;
+    @Builder.Default
+    private Boolean whoWillWin = true;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean halfTimeFullTime = true;
 }
