@@ -18,6 +18,7 @@ import com.example.FYP.Api.Repository.UserRepository;
 import com.example.FYP.Api.Security.SecurityContext;
 import com.example.FYP.Api.Util.PagedResponse;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +27,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -43,7 +50,7 @@ public class CommunityService {
     private final CommunityRoleRepository roleRepository;
 
     @Transactional
-    public CommunityResponseDTO create(@Valid CommunityRequestDTO communityDTO) {
+    public CommunityResponseDTO create(@Valid CommunityRequestDTO communityDTO, MultipartFile file, HttpServletRequest request) {
         // Validation: Check if a community with this name already exists
         if (communityRepository.existsByName(communityDTO.getName())) {
             throw ApiRequestException.badRequest("A community with this name already exists");
@@ -54,15 +61,25 @@ public class CommunityService {
         String description = communityDTO.getDescription() != null 
                 ? communityDTO.getDescription() 
                 : communityDTO.getAbout();
-        
-        // Use logoUrl if provided, otherwise fall back to logo
-        String logo = communityDTO.getLogoUrl() != null 
-                ? communityDTO.getLogoUrl() 
-                : communityDTO.getLogo();
+
+        // Handle file upload if provided
+        String logoUrl = null;
+        if (file != null && !file.isEmpty()) {
+            try {
+                logoUrl = saveCommunityLogo(file, request);
+                log.info("✅ Community logo uploaded: {}", logoUrl);
+            } catch (IOException e) {
+                log.error("❌ Error saving community logo: {}", e.getMessage());
+                throw ApiRequestException.badRequest("Failed to save community logo: " + e.getMessage());
+            }
+        } else if (communityDTO.getLogo() != null && !communityDTO.getLogo().isEmpty()) {
+            // Fallback to legacy logo field if no file uploaded
+            logoUrl = communityDTO.getLogo();
+        }
 
         Community community = Community.builder()
                 .name(communityDTO.getName())
-                .logo(logo)
+                .logo(logoUrl)
                 .location(communityDTO.getLocation())
                 .about(description) // Map description to about field
                 .users(new ArrayList<>(List.of(securityContext.getCurrentUser())))
@@ -83,6 +100,74 @@ public class CommunityService {
 
         Community saved = communityRepository.save(community);
         return mapToDTO(saved);
+    }
+
+    /**
+     * Save community logo file and return the public URL
+     */
+    private String saveCommunityLogo(MultipartFile file, HttpServletRequest request) throws IOException {
+        // Validate file
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("File is empty");
+        }
+
+        // Validate file type (only images)
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new IllegalArgumentException("File must be an image");
+        }
+
+        // Create uploads directory if it doesn't exist
+        String uploadDir = "uploads/communities";
+        Path uploadPath = Paths.get(uploadDir);
+        if (!Files.exists(uploadPath)) {
+            Files.createDirectories(uploadPath);
+            log.info("📁 Created upload directory: {}", uploadPath.toAbsolutePath());
+        }
+
+        // Generate unique filename
+        String fileExtension = "";
+        if (file.getOriginalFilename() != null && file.getOriginalFilename().contains(".")) {
+            fileExtension = file.getOriginalFilename().substring(file.getOriginalFilename().lastIndexOf('.'));
+        } else {
+            // Determine extension from content type
+            if (contentType != null) {
+                if (contentType.contains("jpeg") || contentType.contains("jpg")) {
+                    fileExtension = ".jpg";
+                } else if (contentType.contains("png")) {
+                    fileExtension = ".png";
+                } else if (contentType.contains("gif")) {
+                    fileExtension = ".gif";
+                } else if (contentType.contains("webp")) {
+                    fileExtension = ".webp";
+                } else {
+                    fileExtension = ".jpg"; // Default
+                }
+            } else {
+                fileExtension = ".jpg";
+            }
+        }
+
+        String fileName = "community_" + System.currentTimeMillis() + "_" + 
+                (file.getOriginalFilename() != null ? file.getOriginalFilename().hashCode() : "logo") + fileExtension;
+        Path filePath = uploadPath.resolve(fileName);
+
+        // Save the file
+        Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+        log.info("💾 File saved to: {}", filePath.toAbsolutePath());
+
+        // Construct the full URL from the request
+        String scheme = request.getScheme(); // http or https
+        String serverName = request.getServerName(); // IP or hostname
+        int serverPort = request.getServerPort();
+        String contextPath = request.getContextPath(); // /api/v1
+
+        // Build the full URL
+        String baseUrl = scheme + "://" + serverName + 
+                (serverPort != 80 && serverPort != 443 ? ":" + serverPort : "") + contextPath;
+        String logoUrl = baseUrl + "/uploads/communities/" + fileName;
+
+        return logoUrl;
     }
 
     public void revokeRole(Long communityId, String email, List<CommunityRoles> roles) {

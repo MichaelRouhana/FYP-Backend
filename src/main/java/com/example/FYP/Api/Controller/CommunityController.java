@@ -27,9 +27,12 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -142,7 +145,15 @@ public class  CommunityController {
                     @Parameter(name = "Authorization",
                             description = "Bearer token for authentication",
                             required = true,
-                            in = ParameterIn.HEADER)
+                            in = ParameterIn.HEADER),
+                    @Parameter(name = "data",
+                            description = "Community data as JSON",
+                            required = true,
+                            in = ParameterIn.QUERY),
+                    @Parameter(name = "file",
+                            description = "Community logo image file (optional)",
+                            required = false,
+                            in = ParameterIn.QUERY)
             },
             responses = {
                     @ApiResponse(description = "Community created", responseCode = "200",
@@ -150,9 +161,12 @@ public class  CommunityController {
                                     schema = @Schema(implementation = CommunityResponseDTO.class))),
             })
     @PreAuthorize("hasAuthority('ADMIN')")
-    @PostMapping
-    public ResponseEntity<CommunityResponseDTO> create(@RequestBody @Valid CommunityRequestDTO communityDTO) {
-        return ResponseEntity.ok(communityService.create(communityDTO));
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<CommunityResponseDTO> create(
+            @RequestPart("data") @Valid CommunityRequestDTO communityDTO,
+            @RequestPart(value = "file", required = false) MultipartFile file,
+            HttpServletRequest request) {
+        return ResponseEntity.ok(communityService.create(communityDTO, file, request));
     }
 
 

@@ -25,10 +25,8 @@ public class CommunityRequestDTO {
     @Builder.Default
     private Boolean isPrivate = false; // Default false
     
-    private String logoUrl; // Optional (maps to logo in entity)
-    
     // Legacy fields for backward compatibility
-    private String logo; // Maps to logoUrl if provided
+    private String logo; // Deprecated - use file upload instead
     private String location;
     private String about; // Maps to description if provided
     private List<String> rules;
