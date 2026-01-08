@@ -18,5 +18,6 @@ public class CommunityResponseDTO {
     private String location;
     private String about;
     private List<String> rules;
+    private String inviteCode;
     private List<Long> userIds;
 }

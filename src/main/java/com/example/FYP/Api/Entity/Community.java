@@ -26,6 +26,9 @@ public class Community extends AuditableEntity{
     @Column(nullable = false, unique = true)
     private String name;
 
+    @Column(name = "invite_code", unique = true)
+    private String inviteCode;
+
     private String location;
 
     @Column(length = 1000)

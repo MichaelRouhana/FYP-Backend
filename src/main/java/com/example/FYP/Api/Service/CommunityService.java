@@ -77,11 +77,20 @@ public class CommunityService {
             logoUrl = communityDTO.getLogo();
         }
 
+        // Generate unique invite code before creating the community
+        String inviteCode = java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        
+        // Ensure the code is unique (very unlikely collision, but safety check)
+        while (communityRepository.findByInviteCode(inviteCode).isPresent()) {
+            inviteCode = java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        }
+
         Community community = Community.builder()
                 .name(communityDTO.getName())
                 .logo(logoUrl)
                 .location(communityDTO.getLocation())
                 .about(description) // Map description to about field
+                .inviteCode(inviteCode)
                 .users(new ArrayList<>(List.of(securityContext.getCurrentUser())))
                 .rules(communityDTO.getRules())
                 .build();
@@ -301,6 +310,7 @@ public class CommunityService {
                 .location(community.getLocation())
                 .about(community.getAbout())
                 .rules(community.getRules())
+                .inviteCode(community.getInviteCode())
                 .userIds(community.getUsers().stream().map(User::getId).toList())
                 .build();
     }
@@ -313,6 +323,7 @@ public class CommunityService {
                 .location(community.getLocation())
                 .about(community.getAbout())
                 .rules(community.getRules())
+                .inviteCode(community.getInviteCode())
                 .userIds(community.getUsers().stream().map(User::getId).toList())
                 .build();
     }

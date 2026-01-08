@@ -16,4 +16,7 @@ public interface CommunityRepository extends JpaRepository<Community, Long> {
     
     // Find a community by name (optional, for validation)
     java.util.Optional<Community> findByName(String name);
+    
+    // Find a community by invite code (for QR code invitations)
+    java.util.Optional<Community> findByInviteCode(String inviteCode);
 }
