@@ -37,4 +37,7 @@ public class Bet extends AuditableEntity {
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
+
+    @Column(name = "ticket_id")
+    private String ticketId; // UUID to group multiple legs (accumulator/ticket)
 }

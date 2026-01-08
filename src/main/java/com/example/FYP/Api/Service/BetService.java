@@ -31,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Slf4j
@@ -62,9 +63,14 @@ public class BetService {
             throw ApiRequestException.badRequest("Insufficient balance.");
         }
 
+        // Generate a unique ticketId to group all legs of this accumulator/ticket
+        String ticketId = UUID.randomUUID().toString();
+        
         List<Bet> bets = new ArrayList<>();
         BigDecimal totalOdds = BigDecimal.ONE;
         
+        // CRITICAL: For accumulators, all legs share the same ticketId
+        // The stake is set on each leg (as reference) but only deducted once from user balance
         for (var leg : betDTO.getLegs()) {
             Fixture fixture = fixtureRepository.findById(leg.getFixtureId())
                     .orElseThrow(() -> ApiRequestException.badRequest("Fixture not found"));
@@ -77,10 +83,11 @@ public class BetService {
                     .marketType(leg.getMarketType())
                     .fixture(fixture)
                     .selection(leg.getSelection())
-                    .stake(betDTO.getStake())
+                    .stake(betDTO.getStake()) // Same stake on each leg for accumulator
                     .odd(leg.getOdd())
                     .status(BetStatus.PENDING)
                     .user(user)
+                    .ticketId(ticketId) // CRITICAL: Group all legs with same ticketId
                     .build();
 
             bets.add(bet);
@@ -149,41 +156,82 @@ public class BetService {
     }
 
     public BetResponseDTO getBetById(Long id) {
-        Bet bet = betRepository.findById(id)
+        Bet originalBet = betRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Bet not found with id: " + id));
 
-        // 1. Manually Build the Response (ModelMapper is unreliable here)
+        // Determine if this is part of an accumulator ticket
+        List<Bet> ticketLegs;
+        if (originalBet.getTicketId() != null && !originalBet.getTicketId().isEmpty()) {
+            // This is part of an accumulator - fetch ALL legs with the same ticketId
+            ticketLegs = betRepository.findByTicketId(originalBet.getTicketId());
+            log.info("Found {} legs for ticket {}", ticketLegs.size(), originalBet.getTicketId());
+        } else {
+            // Old single-leg bet (backward compatibility) - use just this bet
+            ticketLegs = List.of(originalBet);
+            log.debug("Bet {} has no ticketId, treating as single-leg bet", id);
+        }
+
+        // 1. Manually Build the Response
         BetResponseDTO response = new BetResponseDTO();
-        response.setId(bet.getId());
-        response.setStake(bet.getStake());
-        response.setStatus(bet.getStatus());
+        response.setId(originalBet.getId()); // Use the first bet's ID as the ticket ID
         
-        // 2. Map Odds & Calculations
-        BigDecimal oddVal = bet.getOdd() != null ? bet.getOdd() : BigDecimal.ONE;
-        response.setTotalOdds(oddVal);
+        // Use the stake from the first leg (all legs should have the same stake for accumulators)
+        Double stake = ticketLegs.get(0).getStake();
+        response.setStake(stake);
         
-        if (bet.getStake() != null) {
-            response.setPotentialWinnings(oddVal.multiply(BigDecimal.valueOf(bet.getStake())));
+        // 2. Calculate Total Odds & Potential Winnings (for accumulator, multiply all leg odds)
+        BigDecimal totalOdds = BigDecimal.ONE;
+        for (Bet legBet : ticketLegs) {
+            if (legBet.getOdd() != null) {
+                totalOdds = totalOdds.multiply(legBet.getOdd());
+            }
+        }
+        response.setTotalOdds(totalOdds);
+        
+        // Calculate potential winnings: stake * totalOdds (for accumulator)
+        if (stake != null) {
+            response.setPotentialWinnings(totalOdds.multiply(BigDecimal.valueOf(stake)));
         } else {
             response.setPotentialWinnings(BigDecimal.ZERO);
         }
 
-        // 3. Construct the "Leg" (Since DB stores single bets as rows, we wrap it in a list)
-        BetLegResponseDTO leg = new BetLegResponseDTO();
-        leg.setId(bet.getId());
-        if (bet.getFixture() != null) leg.setFixtureId(bet.getFixture().getId());
-        leg.setMarketType(bet.getMarketType());
-        leg.setSelection(bet.getSelection());
-        leg.setOdd(bet.getOdd());
-        leg.setStatus(bet.getStatus());
+        // Determine overall status: WON if all legs won, LOST if any leg lost, PENDING otherwise
+        boolean allWon = ticketLegs.stream().allMatch(b -> b.getStatus() == BetStatus.WON);
+        boolean anyLost = ticketLegs.stream().anyMatch(b -> b.getStatus() == BetStatus.LOST);
+        boolean anyVoid = ticketLegs.stream().anyMatch(b -> b.getStatus() == BetStatus.VOID);
         
-        response.setLegs(List.of(leg)); // <--- Crucial: Frontend needs this list
+        if (anyVoid) {
+            response.setStatus(BetStatus.VOID);
+        } else if (allWon) {
+            response.setStatus(BetStatus.WON);
+        } else if (anyLost) {
+            response.setStatus(BetStatus.LOST);
+        } else {
+            response.setStatus(BetStatus.PENDING);
+        }
 
-        // 4. Enrich with Fixture Data (Teams, Scores, Logos)
-        if (bet.getFixture() != null) {
-            Fixture f = bet.getFixture();
-            response.setFixtureId(f.getId());
-            enrichDtoWithFixtureData(response, f.getRawJson());
+        // 3. Build ALL legs response (CRITICAL for frontend to render all legs)
+        List<BetLegResponseDTO> legResponses = new ArrayList<>();
+        for (Bet legBet : ticketLegs) {
+            BetLegResponseDTO leg = new BetLegResponseDTO();
+            leg.setId(legBet.getId());
+            if (legBet.getFixture() != null) {
+                leg.setFixtureId(legBet.getFixture().getId());
+            }
+            leg.setMarketType(legBet.getMarketType());
+            leg.setSelection(legBet.getSelection());
+            leg.setOdd(legBet.getOdd());
+            leg.setStatus(legBet.getStatus());
+            legResponses.add(leg);
+        }
+        
+        response.setLegs(legResponses); // <--- Frontend needs ALL legs of the accumulator
+
+        // 4. Enrich with Fixture Data from the FIRST leg (for main display)
+        if (!ticketLegs.isEmpty() && ticketLegs.get(0).getFixture() != null) {
+            Fixture firstFixture = ticketLegs.get(0).getFixture();
+            response.setFixtureId(firstFixture.getId());
+            enrichDtoWithFixtureData(response, firstFixture.getRawJson());
         }
         
         return response;

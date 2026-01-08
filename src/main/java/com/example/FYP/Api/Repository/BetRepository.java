@@ -32,4 +32,7 @@ public interface BetRepository extends JpaRepository<Bet, Long>, JpaSpecificatio
     // Count methods with date filtering for time range support
     long countByCreatedDateAfter(java.time.LocalDateTime date);
     long countByStatusAndCreatedDateAfter(BetStatus status, java.time.LocalDateTime date);
+
+    // Find all legs of a ticket (accumulator)
+    List<Bet> findByTicketId(String ticketId);
 }
