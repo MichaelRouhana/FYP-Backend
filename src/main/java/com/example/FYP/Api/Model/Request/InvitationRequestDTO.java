@@ -11,4 +11,6 @@ public class InvitationRequestDTO {
     @NotBlank(message = "inviteeEmail cannot be null")
     @Email
     private String inviteeEmail;
+    
+    private String inviteCode;
 }

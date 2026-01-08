@@ -39,6 +39,7 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -205,6 +206,52 @@ public class  CommunityController {
         return ResponseEntity.ok().build();
     }
 
+    @Operation(summary = "join community by invite code",
+            parameters = {
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER)
+            },
+            responses = {
+                    @ApiResponse(description = "Joined successfully", responseCode = "200"),
+                    @ApiResponse(description = "Invalid invite code", responseCode = "404"),
+                    @ApiResponse(description = "Already a member", responseCode = "400")
+            })
+    @PostMapping("/join")
+    public ResponseEntity<Map<String, String>> joinCommunity(@RequestBody @Valid com.example.FYP.Api.Model.Request.InvitationRequestDTO request) {
+        User currentUser = securityContext.getCurrentUser();
+        
+        if (request.getInviteCode() == null || request.getInviteCode().trim().isEmpty()) {
+            throw ApiRequestException.badRequest("Invite code is required");
+        }
+        
+        communityService.joinCommunity(request.getInviteCode().trim(), currentUser);
+        
+        return ResponseEntity.ok(Map.of("message", "Successfully joined the community"));
+    }
+
+    @Operation(summary = "join community by invite code (legacy endpoint)",
+            parameters = {
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER)
+            },
+            responses = {
+                    @ApiResponse(description = "Joined successfully", responseCode = "200"),
+                    @ApiResponse(description = "Invalid invite code", responseCode = "404"),
+                    @ApiResponse(description = "Already a member", responseCode = "400")
+            })
+    @PostMapping("/join-by-code")
+    public ResponseEntity<?> joinByInviteCode(@RequestBody java.util.Map<String, String> request) {
+        String inviteCode = request.get("inviteCode");
+        if (inviteCode == null || inviteCode.trim().isEmpty()) {
+            throw ApiRequestException.badRequest("Invite code is required");
+        }
+        communityService.joinByInviteCode(inviteCode.trim());
+        return ResponseEntity.ok().build();
+    }
 
     @Operation(summary = "leave community",
             parameters = {

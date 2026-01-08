@@ -295,6 +295,40 @@ public class CommunityService {
         }
     }
 
+    @Transactional
+    public void joinByInviteCode(String inviteCode) {
+        // Find community by invite code
+        Community community = communityRepository.findByInviteCode(inviteCode)
+                .orElseThrow(() -> new EntityNotFoundException("Invalid invite code"));
+        
+        User user = securityContext.getCurrentUser();
+
+        if (!community.getUsers().contains(user)) {
+            community.getUsers().add(user);
+            communityRepository.save(community);
+        } else {
+            throw ApiRequestException.badRequest("user already in this community");
+        }
+    }
+
+    @Transactional
+    public void joinCommunity(String inviteCode, User user) {
+        // Find community by invite code
+        Community community = communityRepository.findByInviteCode(inviteCode)
+                .orElseThrow(() -> new EntityNotFoundException("Community not found with the provided invite code"));
+        
+        // Check if user is already a member
+        if (community.getUsers().contains(user)) {
+            throw ApiRequestException.badRequest("Already a member");
+        }
+        
+        // Add user to community
+        community.getUsers().add(user);
+        
+        // Save community (memberCount is derived from users.size(), no need to increment separately)
+        communityRepository.save(community);
+    }
+
     public List<CommunityResponseDTO> getJoinedCommunities(Long userId) {
         List<Community> communities = communityRepository.findByUsers_Id(userId);
         return communities.stream()
