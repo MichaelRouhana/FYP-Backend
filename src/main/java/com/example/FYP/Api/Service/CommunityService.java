@@ -10,6 +10,7 @@ import com.example.FYP.Api.Model.Filter.CommunityFilterDTO;
 import com.example.FYP.Api.Model.Patch.CommunityPatchDTO;
 import com.example.FYP.Api.Model.Request.CommunityRequestDTO;
 import com.example.FYP.Api.Model.Response.CommunityResponseDTO;
+import com.example.FYP.Api.Model.Response.CommunityMemberDTO;
 import com.example.FYP.Api.Model.View.CommunityViewDTO;
 import com.example.FYP.Api.Model.View.UserViewDTO;
 import com.example.FYP.Api.Repository.CommunityRepository;
@@ -291,6 +292,74 @@ public class CommunityService {
                 .toList();
     }
 
+    /**
+     * Get community members with their roles
+     */
+    public List<CommunityMemberDTO> getMembersWithRoles(Long communityId) {
+        Community community = communityRepository.findById(communityId)
+                .orElseThrow(() -> new EntityNotFoundException("Community not found"));
+
+        return community.getUsers().stream()
+                .map(user -> {
+                    // Get user's roles in this community
+                    List<String> communityRoles = user.getCommunityRoles().stream()
+                            .filter(role -> role.getCommunity().getId().equals(communityId))
+                            .map(role -> role.getRole().name())
+                            .toList();
+
+                    return CommunityMemberDTO.builder()
+                            .id(user.getId())
+                            .username(user.getUsername())
+                            .email(user.getEmail())
+                            .pfp(user.getPfp())
+                            .points(user.getPoints())
+                            .about(user.getAbout())
+                            .country(user.getAddress() != null ? user.getAddress().getCountry() : null)
+                            .roles(communityRoles)
+                            .build();
+                })
+                .toList();
+    }
+
+    /**
+     * Get only moderators of the community
+     */
+    public List<CommunityMemberDTO> getModerators(Long communityId) {
+        Community community = communityRepository.findById(communityId)
+                .orElseThrow(() -> new EntityNotFoundException("Community not found"));
+
+        // Find MODERATOR role for this community
+        List<CommunityRole> moderatorRoles = roleRepository.findByCommunityIdAndRole(communityId, CommunityRoles.MODERATOR);
+        
+        if (moderatorRoles.isEmpty()) {
+            return List.of(); // No moderators
+        }
+
+        CommunityRole moderatorRole = moderatorRoles.get(0);
+
+        // Get all users with MODERATOR role
+        return moderatorRole.getUsers().stream()
+                .map(user -> {
+                    // Get all user's roles in this community
+                    List<String> communityRoles = user.getCommunityRoles().stream()
+                            .filter(role -> role.getCommunity().getId().equals(communityId))
+                            .map(role -> role.getRole().name())
+                            .toList();
+
+                    return CommunityMemberDTO.builder()
+                            .id(user.getId())
+                            .username(user.getUsername())
+                            .email(user.getEmail())
+                            .pfp(user.getPfp())
+                            .points(user.getPoints())
+                            .about(user.getAbout())
+                            .country(user.getAddress() != null ? user.getAddress().getCountry() : null)
+                            .roles(communityRoles)
+                            .build();
+                })
+                .toList();
+    }
+
     @Transactional
     public void leave(Long communityId) {
         Community community = communityRepository.findById(communityId)
@@ -356,6 +425,14 @@ public class CommunityService {
     }
 
     private CommunityResponseDTO mapToDTO(Community community) {
+        // Get moderator IDs for this community
+        List<CommunityRole> moderatorRoles = roleRepository.findByCommunityIdAndRole(community.getId(), CommunityRoles.MODERATOR);
+        List<Long> moderatorIds = moderatorRoles.isEmpty() 
+                ? List.of() 
+                : moderatorRoles.get(0).getUsers().stream()
+                        .map(User::getId)
+                        .toList();
+
         return CommunityResponseDTO.builder()
                 .id(community.getId())
                 .name(community.getName())
@@ -365,6 +442,7 @@ public class CommunityService {
                 .rules(community.getRules())
                 .inviteCode(community.getInviteCode())
                 .userIds(community.getUsers().stream().map(User::getId).toList())
+                .moderatorIds(moderatorIds)
                 .build();
     }
 
@@ -402,4 +480,113 @@ public class CommunityService {
 
             return roleRepository.findRolesByUserAndCommunity(email, communityId);
         }
+
+    /**
+     * Promote a user to MODERATOR role in a community
+     * Only OWNER can promote members
+     */
+    @Transactional
+    public void promoteToModerator(Long communityId, Long userId, User requester) {
+        // Verify community exists
+        Community community = communityRepository.findById(communityId)
+                .orElseThrow(() -> new EntityNotFoundException("Community not found"));
+
+        // Verify requester is OWNER of the community
+        boolean isOwner = requester.getCommunityRoles().stream()
+                .anyMatch(role -> role.getCommunity().getId().equals(communityId) 
+                        && role.getRole() == CommunityRoles.OWNER);
+        
+        if (!isOwner) {
+            throw ApiRequestException.badRequest("Only community OWNER can promote members");
+        }
+
+        // Find the user to promote
+        User userToPromote = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        // Verify user is a member of the community
+        if (!community.getUsers().contains(userToPromote)) {
+            throw ApiRequestException.badRequest("User is not a member of this community");
+        }
+
+        // Check if user is already a moderator
+        boolean isAlreadyModerator = userToPromote.getCommunityRoles().stream()
+                .anyMatch(role -> role.getCommunity().getId().equals(communityId) 
+                        && role.getRole() == CommunityRoles.MODERATOR);
+        
+        if (isAlreadyModerator) {
+            throw ApiRequestException.badRequest("User is already a moderator");
+        }
+
+        // Find or create MODERATOR role for this community
+        List<CommunityRole> moderatorRoles = roleRepository.findByCommunityIdAndRole(communityId, CommunityRoles.MODERATOR);
+        CommunityRole moderatorRole;
+        
+        if (moderatorRoles.isEmpty()) {
+            // Create new MODERATOR role for this community
+            moderatorRole = CommunityRole.builder()
+                    .role(CommunityRoles.MODERATOR)
+                    .community(community)
+                    .build();
+            moderatorRole = roleRepository.save(moderatorRole);
+            // Add role to community's roles set
+            community.getRoles().add(moderatorRole);
+        } else {
+            moderatorRole = moderatorRoles.get(0);
+        }
+
+        // Assign MODERATOR role to user
+        if (!userToPromote.getCommunityRoles().contains(moderatorRole)) {
+            userToPromote.getCommunityRoles().add(moderatorRole);
+            userRepository.save(userToPromote);
+            log.info("✅ User {} promoted to MODERATOR in community {}", userId, communityId);
+        }
+    }
+
+    /**
+     * Demote a MODERATOR back to regular MEMBER
+     * Only OWNER can demote moderators
+     */
+    @Transactional
+    public void demoteToMember(Long communityId, Long userId, User requester) {
+        // Verify community exists
+        Community community = communityRepository.findById(communityId)
+                .orElseThrow(() -> new EntityNotFoundException("Community not found"));
+
+        // Verify requester is OWNER of the community
+        boolean isOwner = requester.getCommunityRoles().stream()
+                .anyMatch(role -> role.getCommunity().getId().equals(communityId) 
+                        && role.getRole() == CommunityRoles.OWNER);
+        
+        if (!isOwner) {
+            throw ApiRequestException.badRequest("Only community OWNER can demote moderators");
+        }
+
+        // Find the user to demote
+        User userToDemote = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        // Verify user is a member of the community
+        if (!community.getUsers().contains(userToDemote)) {
+            throw ApiRequestException.badRequest("User is not a member of this community");
+        }
+
+        // Find MODERATOR role for this community
+        List<CommunityRole> moderatorRoles = roleRepository.findByCommunityIdAndRole(communityId, CommunityRoles.MODERATOR);
+        
+        if (moderatorRoles.isEmpty()) {
+            throw ApiRequestException.badRequest("No moderator role found for this community");
+        }
+
+        CommunityRole moderatorRole = moderatorRoles.get(0);
+
+        // Remove MODERATOR role from user
+        if (userToDemote.getCommunityRoles().contains(moderatorRole)) {
+            userToDemote.getCommunityRoles().remove(moderatorRole);
+            userRepository.save(userToDemote);
+            log.info("✅ User {} demoted from MODERATOR to MEMBER in community {}", userId, communityId);
+        } else {
+            throw ApiRequestException.badRequest("User is not a moderator");
+        }
+    }
 }

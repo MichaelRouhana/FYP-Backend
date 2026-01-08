@@ -20,4 +20,5 @@ public class CommunityResponseDTO {
     private List<String> rules;
     private String inviteCode;
     private List<Long> userIds;
+    private List<Long> moderatorIds; // Optional: List of moderator user IDs
 }

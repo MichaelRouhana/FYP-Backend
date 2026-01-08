@@ -22,5 +22,12 @@ public interface CommunityRoleRepository extends JpaRepository<CommunityRole, Lo
     List<String> findRolesByUserAndCommunity(@Param("email") String email,
                                                      @Param("communityId") Long communityId);
 
+    @Query("""
+    SELECT r
+    FROM CommunityRole r
+    WHERE r.community.id = :communityId AND r.role = :role
+""")
+    List<CommunityRole> findByCommunityIdAndRole(@Param("communityId") Long communityId,
+                                                  @Param("role") CommunityRoles role);
 
 }

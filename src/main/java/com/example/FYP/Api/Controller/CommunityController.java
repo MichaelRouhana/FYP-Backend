@@ -10,6 +10,7 @@ import com.example.FYP.Api.Model.Request.CommunityRequestDTO;
 import com.example.FYP.Api.Model.Request.JoinCommunityRequestDTO;
 import com.example.FYP.Api.Model.CommunityMessageDTO;
 import com.example.FYP.Api.Model.Response.CommunityResponseDTO;
+import com.example.FYP.Api.Model.Response.CommunityMemberDTO;
 import com.example.FYP.Api.Model.View.CommunityViewDTO;
 import com.example.FYP.Api.Messaging.WebSocket.CommunityMessage;
 import com.example.FYP.Api.Entity.User;
@@ -373,6 +374,80 @@ public class  CommunityController {
     @GetMapping("/{communityId}/members")
     public ResponseEntity<?> getMembers(@PathVariable Long communityId) {
         return ResponseEntity.ok(communityService.getMembers(communityId));
+    }
+
+    @Operation(summary = "retrieve community's members with roles",
+            parameters = {
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER)
+
+            })
+    @GetMapping("/{communityId}/members/with-roles")
+    public ResponseEntity<List<CommunityMemberDTO>> getMembersWithRoles(@PathVariable Long communityId) {
+        return ResponseEntity.ok(communityService.getMembersWithRoles(communityId));
+    }
+
+    @Operation(summary = "retrieve community's moderators",
+            parameters = {
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER)
+
+            })
+    @GetMapping("/{communityId}/moderators")
+    public ResponseEntity<List<CommunityMemberDTO>> getModerators(@PathVariable Long communityId) {
+        return ResponseEntity.ok(communityService.getModerators(communityId));
+    }
+
+    @Operation(summary = "Promote a member to moderator",
+            parameters = {
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER),
+                    @Parameter(name = "communityId", description = "Community ID", required = true),
+                    @Parameter(name = "userId", description = "User ID to promote", required = true)
+            },
+            responses = {
+                    @ApiResponse(description = "User promoted successfully", responseCode = "200"),
+                    @ApiResponse(description = "Access denied - Only OWNER can promote", responseCode = "403"),
+                    @ApiResponse(description = "User not found or not a member", responseCode = "404")
+            })
+    @RequiredRole({CommunityRoles.OWNER})
+    @PutMapping("/{communityId}/promote/{userId}")
+    public ResponseEntity<Map<String, String>> promoteToModerator(
+            @PathVariable Long communityId,
+            @PathVariable Long userId) {
+        User requester = securityContext.getCurrentUser();
+        communityService.promoteToModerator(communityId, userId, requester);
+        return ResponseEntity.ok(Map.of("message", "User promoted to moderator successfully"));
+    }
+
+    @Operation(summary = "Demote a moderator to member",
+            parameters = {
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER),
+                    @Parameter(name = "communityId", description = "Community ID", required = true),
+                    @Parameter(name = "userId", description = "User ID to demote", required = true)
+            },
+            responses = {
+                    @ApiResponse(description = "User demoted successfully", responseCode = "200"),
+                    @ApiResponse(description = "Access denied - Only OWNER can demote", responseCode = "403"),
+                    @ApiResponse(description = "User not found or not a moderator", responseCode = "404")
+            })
+    @RequiredRole({CommunityRoles.OWNER})
+    @PutMapping("/{communityId}/demote/{userId}")
+    public ResponseEntity<Map<String, String>> demoteToMember(
+            @PathVariable Long communityId,
+            @PathVariable Long userId) {
+        User requester = securityContext.getCurrentUser();
+        communityService.demoteToMember(communityId, userId, requester);
+        return ResponseEntity.ok(Map.of("message", "User demoted to member successfully"));
     }
 
 
