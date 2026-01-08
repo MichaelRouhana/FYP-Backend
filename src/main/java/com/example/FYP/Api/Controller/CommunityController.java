@@ -12,10 +12,13 @@ import com.example.FYP.Api.Model.Response.CommunityResponseDTO;
 import com.example.FYP.Api.Model.View.CommunityViewDTO;
 import com.example.FYP.Api.Messaging.WebSocket.CommunityMessage;
 import com.example.FYP.Api.Entity.User;
+import com.example.FYP.Api.Exception.ApiRequestException;
 import com.example.FYP.Api.Repository.CommunityMessageRepository;
 import com.example.FYP.Api.Security.SecurityContext;
 import com.example.FYP.Api.Service.CommunityService;
 import com.example.FYP.Api.Util.PagedResponse;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -54,6 +57,9 @@ public class  CommunityController {
 
     @Autowired
     private SecurityContext securityContext;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
 
 
@@ -163,10 +169,18 @@ public class  CommunityController {
     @PreAuthorize("hasAuthority('ADMIN')")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CommunityResponseDTO> create(
-            @RequestPart("data") @Valid CommunityRequestDTO communityDTO,
+            @RequestPart("data") String data,
             @RequestPart(value = "file", required = false) MultipartFile file,
             HttpServletRequest request) {
-        return ResponseEntity.ok(communityService.create(communityDTO, file, request));
+        try {
+            // Manually parse the JSON string since React Native sends it as text/plain
+            CommunityRequestDTO communityDTO = objectMapper.readValue(data, CommunityRequestDTO.class);
+            return ResponseEntity.ok(communityService.create(communityDTO, file, request));
+        } catch (JsonProcessingException e) {
+            throw ApiRequestException.badRequest("Invalid JSON format in community data: " + e.getMessage());
+        } catch (Exception e) {
+            throw ApiRequestException.badRequest("Failed to parse community data: " + e.getMessage());
+        }
     }
 
 
