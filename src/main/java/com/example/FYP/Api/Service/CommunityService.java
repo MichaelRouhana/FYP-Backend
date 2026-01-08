@@ -221,9 +221,28 @@ public class CommunityService {
         userRepository.save(userInfo);
     }
 
+    @Transactional
     public CommunityViewDTO get(Long communityId) {
         Community community = communityRepository.findById(communityId)
                 .orElseThrow(() -> new EntityNotFoundException("Community not found"));
+        
+        // Self-healing: Generate invite code if missing (for old communities)
+        if (community.getInviteCode() == null || community.getInviteCode().isEmpty()) {
+            // Generate a unique code
+            String newCode = java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+            
+            // Ensure the code is unique (very unlikely collision, but safety check)
+            while (communityRepository.findByInviteCode(newCode).isPresent()) {
+                newCode = java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+            }
+            
+            // Set and save the new code
+            community.setInviteCode(newCode);
+            communityRepository.save(community);
+            
+            log.info("🔧 Self-healed community {} with new invite code: {}", communityId, newCode);
+        }
+        
         return mapToDTOView(community);
     }
 
