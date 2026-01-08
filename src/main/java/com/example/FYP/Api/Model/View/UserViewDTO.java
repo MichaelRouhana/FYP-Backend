@@ -6,10 +6,11 @@ import java.util.List;
 
 @Data
 public class UserViewDTO {
+    private Long id; // User ID
     private String username;
     private String email;
     private String pfp;
-    private List<String> roles;
+    private List<String> roles; // Community roles: 'OWNER', 'MODERATOR', 'MEMBER'
     // Profile fields
     private Long totalPoints; // User's balance/points
     private Long totalBets; // Total number of bets

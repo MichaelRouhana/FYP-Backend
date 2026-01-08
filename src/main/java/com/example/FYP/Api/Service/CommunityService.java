@@ -424,6 +424,78 @@ public class CommunityService {
                 .toList();
     }
 
+    /**
+     * Map User entity to UserViewDTO with community-specific roles
+     */
+    private UserViewDTO mapUserToDTO(User user, Long communityId) {
+        UserViewDTO dto = modelMapper.map(user, UserViewDTO.class);
+        
+        // Map ID (ModelMapper might not map it if it's @JsonIgnore)
+        dto.setId(user.getId());
+        
+        // Map points
+        if (dto.getTotalPoints() == null && user.getPoints() != null) {
+            dto.setTotalPoints(user.getPoints());
+        }
+        
+        // Get community roles for this user
+        List<String> communityRoles = user.getCommunityRoles().stream()
+                .filter(role -> role.getCommunity() != null && role.getCommunity().getId().equals(communityId))
+                .map(role -> role.getRole().name())
+                .distinct()
+                .toList();
+        dto.setRoles(communityRoles);
+        
+        // Map country from address
+        if (user.getAddress() != null && user.getAddress().getCountry() != null) {
+            dto.setCountry(user.getAddress().getCountry());
+        }
+        
+        return dto;
+    }
+
+    /**
+     * Get moderators (OWNER and MODERATOR roles) for a community
+     */
+    private List<UserViewDTO> getModeratorsForCommunity(Community community) {
+        Long communityId = community.getId();
+        
+        // Get all members of the community and filter by roles
+        // More efficient: Query from community's users instead of roles
+        return community.getUsers().stream()
+                .filter(user -> {
+                    // Check if user has OWNER or MODERATOR role for this community
+                    return user.getCommunityRoles().stream()
+                            .anyMatch(role -> {
+                                if (role.getCommunity() == null) return false;
+                                if (!role.getCommunity().getId().equals(communityId)) return false;
+                                return role.getRole() == CommunityRoles.OWNER || 
+                                       role.getRole() == CommunityRoles.MODERATOR;
+                            });
+                })
+                .map(user -> mapUserToDTO(user, communityId))
+                .toList();
+    }
+
+    /**
+     * Get top 3 leaderboard members by points
+     */
+    private List<UserViewDTO> getLeaderboardForCommunity(Community community) {
+        Long communityId = community.getId();
+        
+        // Get all members, sort by points descending, limit to top 3
+        return community.getUsers().stream()
+                .filter(user -> user.getPoints() != null) // Only users with points
+                .sorted((u1, u2) -> {
+                    Long p1 = u1.getPoints() != null ? u1.getPoints() : 0L;
+                    Long p2 = u2.getPoints() != null ? u2.getPoints() : 0L;
+                    return p2.compareTo(p1); // Descending order
+                })
+                .limit(3)
+                .map(user -> mapUserToDTO(user, communityId))
+                .toList();
+    }
+
     private CommunityResponseDTO mapToDTO(Community community) {
         // Get moderator IDs for this community
         List<CommunityRole> moderatorRoles = roleRepository.findByCommunityIdAndRole(community.getId(), CommunityRoles.MODERATOR);
@@ -432,6 +504,10 @@ public class CommunityService {
                 : moderatorRoles.get(0).getUsers().stream()
                         .map(User::getId)
                         .toList();
+
+        // Get moderators and leaderboard
+        List<UserViewDTO> moderators = getModeratorsForCommunity(community);
+        List<UserViewDTO> leaderboard = getLeaderboardForCommunity(community);
 
         return CommunityResponseDTO.builder()
                 .id(community.getId())
@@ -443,10 +519,16 @@ public class CommunityService {
                 .inviteCode(community.getInviteCode())
                 .userIds(community.getUsers().stream().map(User::getId).toList())
                 .moderatorIds(moderatorIds)
+                .moderators(moderators)
+                .leaderboard(leaderboard)
                 .build();
     }
 
     private CommunityViewDTO mapToDTOView(Community community) {
+        // Get moderators and leaderboard
+        List<UserViewDTO> moderators = getModeratorsForCommunity(community);
+        List<UserViewDTO> leaderboard = getLeaderboardForCommunity(community);
+
         return CommunityViewDTO.builder()
                 .id(community.getId())
                 .name(community.getName())
@@ -456,6 +538,8 @@ public class CommunityService {
                 .rules(community.getRules())
                 .inviteCode(community.getInviteCode())
                 .userIds(community.getUsers().stream().map(User::getId).toList())
+                .moderators(moderators)
+                .leaderboard(leaderboard)
                 .build();
     }
 

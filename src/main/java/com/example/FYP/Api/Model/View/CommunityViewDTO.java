@@ -20,4 +20,6 @@ public class CommunityViewDTO {
     private List<String> rules;
     private String inviteCode;
     private List<Long> userIds;
+    private List<UserViewDTO> leaderboard; // Top 3 members by points
+    private List<UserViewDTO> moderators;  // Admins and Moderators
 }
