@@ -27,7 +27,6 @@ public class BetViewAllDTO {
     private String awayTeamLogo;
     private Integer homeScore;
     private Integer awayScore;
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime matchDate;
+    private String matchDate;   // ISO String from API-Football
     private String matchStatus; // e.g., "FT", "NS", "LIVE"
 }

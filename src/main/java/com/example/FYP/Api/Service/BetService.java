@@ -230,8 +230,10 @@ public class BetService {
                 v.setAwayTeamLogo(awayLogo);
                 v.setHomeScore(homeScore);
                 v.setAwayScore(awayScore);
-                // BetViewAllDTO might expect LocalDateTime or String depending on definition
-                // If it's defined as String, use v.setMatchDate(date);
+                
+                // CRITICAL FIX: Pass the date string to the DTO
+                v.setMatchDate(date); 
+                v.setMatchStatus(status);
             }
 
         } catch (Exception e) {
