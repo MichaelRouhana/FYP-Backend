@@ -44,14 +44,33 @@ public class CommunityService {
 
     @Transactional
     public CommunityResponseDTO create(@Valid CommunityRequestDTO communityDTO) {
+        // Validation: Check if a community with this name already exists
+        if (communityRepository.existsByName(communityDTO.getName())) {
+            throw ApiRequestException.badRequest("A community with this name already exists");
+        }
+
+        // Map DTO fields to entity
+        // Use description if provided, otherwise fall back to about
+        String description = communityDTO.getDescription() != null 
+                ? communityDTO.getDescription() 
+                : communityDTO.getAbout();
+        
+        // Use logoUrl if provided, otherwise fall back to logo
+        String logo = communityDTO.getLogoUrl() != null 
+                ? communityDTO.getLogoUrl() 
+                : communityDTO.getLogo();
+
         Community community = Community.builder()
                 .name(communityDTO.getName())
-                .logo(communityDTO.getLogo())
+                .logo(logo)
                 .location(communityDTO.getLocation())
-                .about(communityDTO.getAbout())
+                .about(description) // Map description to about field
                 .users(new ArrayList<>(List.of(securityContext.getCurrentUser())))
                 .rules(communityDTO.getRules())
                 .build();
+
+        // Set createdAt is handled by AuditableEntity
+        // memberCount is derived from users.size() (starts with 1 - the admin creator)
 
         CommunityRole role = CommunityRole.builder().role(CommunityRoles.OWNER).community(community).build();
         CommunityRole roleMember = CommunityRole.builder().role(CommunityRoles.MEMBER).community(community).build();

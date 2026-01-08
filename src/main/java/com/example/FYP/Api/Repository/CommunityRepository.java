@@ -10,4 +10,10 @@ import java.util.List;
 public interface CommunityRepository extends JpaRepository<Community, Long> {
     // Find all communities where the user is a member
     List<Community> findByUsers_Id(Long userId);
+    
+    // Check if a community with the given name already exists
+    boolean existsByName(String name);
+    
+    // Find a community by name (optional, for validation)
+    java.util.Optional<Community> findByName(String name);
 }

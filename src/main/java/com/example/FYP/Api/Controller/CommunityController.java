@@ -2,6 +2,7 @@ package com.example.FYP.Api.Controller;
 
 import com.example.FYP.Api.Interceptor.Annotation.RequiredRole;
 import com.example.FYP.Api.Loader.Annotation.Feature;
+import org.springframework.security.access.prepost.PreAuthorize;
 import com.example.FYP.Api.Model.Constant.CommunityRoles;
 import com.example.FYP.Api.Model.Filter.CommunityFilterDTO;
 import com.example.FYP.Api.Model.Patch.CommunityPatchDTO;
@@ -136,20 +137,19 @@ public class  CommunityController {
         return ResponseEntity.ok(communityService.get(communityId));
     }
 
-    @Operation(summary = "create community",
+    @Operation(summary = "create community (Admin only)",
             parameters = {
                     @Parameter(name = "Authorization",
                             description = "Bearer token for authentication",
                             required = true,
-                            in = ParameterIn.HEADER),
-                    @Parameter(name = "organizationUUID", description = "organizationUUID", required = true)
-
+                            in = ParameterIn.HEADER)
             },
             responses = {
                     @ApiResponse(description = "Community created", responseCode = "200",
                             content = @Content(mediaType = "application/json",
                                     schema = @Schema(implementation = CommunityResponseDTO.class))),
             })
+    @PreAuthorize("hasAuthority('ADMIN')")
     @PostMapping
     public ResponseEntity<CommunityResponseDTO> create(@RequestBody @Valid CommunityRequestDTO communityDTO) {
         return ResponseEntity.ok(communityService.create(communityDTO));
