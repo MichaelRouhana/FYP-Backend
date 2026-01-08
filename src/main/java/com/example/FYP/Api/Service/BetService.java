@@ -152,12 +152,37 @@ public class BetService {
         Bet bet = betRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Bet not found with id: " + id));
 
-        BetResponseDTO response = modelMapper.map(bet, BetResponseDTO.class);
+        // 1. Manually Build the Response (ModelMapper is unreliable here)
+        BetResponseDTO response = new BetResponseDTO();
+        response.setId(bet.getId());
+        response.setStake(bet.getStake());
+        response.setStatus(bet.getStatus());
+        
+        // 2. Map Odds & Calculations
+        BigDecimal oddVal = bet.getOdd() != null ? bet.getOdd() : BigDecimal.ONE;
+        response.setTotalOdds(oddVal);
+        
+        if (bet.getStake() != null) {
+            response.setPotentialWinnings(oddVal.multiply(BigDecimal.valueOf(bet.getStake())));
+        } else {
+            response.setPotentialWinnings(BigDecimal.ZERO);
+        }
 
+        // 3. Construct the "Leg" (Since DB stores single bets as rows, we wrap it in a list)
+        BetLegResponseDTO leg = new BetLegResponseDTO();
+        leg.setId(bet.getId());
+        if (bet.getFixture() != null) leg.setFixtureId(bet.getFixture().getId());
+        leg.setMarketType(bet.getMarketType());
+        leg.setSelection(bet.getSelection());
+        leg.setOdd(bet.getOdd());
+        leg.setStatus(bet.getStatus());
+        
+        response.setLegs(List.of(leg)); // <--- Crucial: Frontend needs this list
+
+        // 4. Enrich with Fixture Data (Teams, Scores, Logos)
         if (bet.getFixture() != null) {
             Fixture f = bet.getFixture();
             response.setFixtureId(f.getId());
-            // Parse JSON string safely
             enrichDtoWithFixtureData(response, f.getRawJson());
         }
         
