@@ -1,6 +1,7 @@
 package com.example.FYP.Api.Service;
 
 import com.example.FYP.Api.Entity.Address;
+import com.example.FYP.Api.Entity.BetStatus;
 import com.example.FYP.Api.Entity.Organization;
 import com.example.FYP.Api.Entity.User;
 import com.example.FYP.Api.Entity.UserRole;
@@ -19,6 +20,7 @@ import com.example.FYP.Api.Model.Request.SignUpRequestDTO;
 import com.example.FYP.Api.Model.Response.JwtResponseDTO;
 import com.example.FYP.Api.Model.View.CommunityViewDTO;
 import com.example.FYP.Api.Model.View.UserViewDTO;
+import com.example.FYP.Api.Repository.BetRepository;
 import com.example.FYP.Api.Repository.OrganizationRepository;
 import com.example.FYP.Api.Repository.RoleRepository;
 import com.example.FYP.Api.Repository.UserRepository;
@@ -57,6 +59,7 @@ import java.util.stream.Collectors;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final BetRepository betRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
@@ -289,5 +292,84 @@ public class UserService {
                 .stream()
                 .map((e) -> modelMapper.map(e, CommunityViewDTO.class))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Get all users with optional search filter
+     * @param search Optional search term for username (case-insensitive)
+     * @param pageable Pagination parameters
+     * @return Paged response of users
+     */
+    public PagedResponse<UserViewDTO> getAllUsers(String search, Pageable pageable) {
+        Page<User> userPage;
+        
+        if (search != null && !search.trim().isEmpty()) {
+            userPage = userRepository.findByUsernameContainingIgnoreCase(search.trim(), pageable);
+        } else {
+            userPage = userRepository.findAll(pageable);
+        }
+        
+        Page<UserViewDTO> dtoPage = userPage.map(this::mapUserToViewDTO);
+        return PagedResponse.fromPage(dtoPage);
+    }
+
+    /**
+     * Get top betters sorted by number of won bets
+     * @param pageable Pagination parameters
+     * @return Paged response of users sorted by wins
+     */
+    public PagedResponse<UserViewDTO> getTopBetters(Pageable pageable) {
+        Page<User> userPage = userRepository.findTopBetters(BetStatus.WON.name(), pageable);
+        Page<UserViewDTO> dtoPage = userPage.map(this::mapUserToViewDTO);
+        return PagedResponse.fromPage(dtoPage);
+    }
+
+    /**
+     * Get top users sorted by total points
+     * @param pageable Pagination parameters
+     * @return Paged response of users sorted by points (descending)
+     */
+    public PagedResponse<UserViewDTO> getTopPoints(Pageable pageable) {
+        Page<User> userPage = userRepository.findAllByOrderByPointsDesc(pageable);
+        Page<UserViewDTO> dtoPage = userPage.map(this::mapUserToViewDTO);
+        return PagedResponse.fromPage(dtoPage);
+    }
+
+    /**
+     * Helper method to map User entity to UserViewDTO with bet statistics
+     * @param user User entity
+     * @return UserViewDTO with populated statistics
+     */
+    private UserViewDTO mapUserToViewDTO(User user) {
+        // Calculate betting statistics
+        long totalBets = betRepository.countByUserId(user.getId());
+        long totalWins = betRepository.countByUserIdAndStatus(user.getId(), BetStatus.WON);
+        double winRate = totalBets > 0 ? (double) totalWins / totalBets * 100.0 : 0.0;
+        
+        // Map to DTO
+        UserViewDTO dto = new UserViewDTO();
+        dto.setId(user.getId());
+        dto.setUsername(user.getUsername());
+        dto.setEmail(user.getEmail());
+        dto.setPfp(user.getPfp());
+        dto.setTotalPoints(user.getPoints() != null ? user.getPoints() : 0L);
+        dto.setTotalBets(totalBets);
+        dto.setTotalWins(totalWins);
+        dto.setWinRate(winRate);
+        dto.setAbout(user.getAbout());
+        
+        // Get country from Address
+        if (user.getAddress() != null && user.getAddress().getCountry() != null) {
+            dto.setCountry(user.getAddress().getCountry());
+        }
+        
+        // Map roles (system roles, not community roles for dashboard)
+        if (user.getRoles() != null) {
+            dto.setRoles(user.getRoles().stream()
+                    .map(role -> role.getRole().name())
+                    .collect(Collectors.toList()));
+        }
+        
+        return dto;
     }
 }

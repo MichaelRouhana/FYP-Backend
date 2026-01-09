@@ -359,4 +359,64 @@ public class UserController {
         return ResponseEntity.ok(jwtResponse);
     }
 
+    @Operation(summary = "Get all users with optional search",
+            parameters = {
+                    @Parameter(name = "search", description = "Search term for username (optional)", required = false),
+                    @Parameter(name = "page", description = "Page number (0-indexed)", required = false),
+                    @Parameter(name = "size", description = "Page size", required = false),
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER)
+            },
+            responses = {
+                    @ApiResponse(description = "Users retrieved successfully", responseCode = "200",
+                            content = @Content(mediaType = "application/json",
+                                    schema = @Schema(implementation = PagedResponse.class)))
+            })
+    @GetMapping
+    public ResponseEntity<PagedResponse<UserViewDTO>> getAllUsers(
+            @RequestParam(required = false) String search,
+            Pageable pageable) {
+        return ResponseEntity.ok(userService.getAllUsers(search, pageable));
+    }
+
+    @Operation(summary = "Get top betters (users sorted by number of won bets)",
+            parameters = {
+                    @Parameter(name = "page", description = "Page number (0-indexed)", required = false),
+                    @Parameter(name = "size", description = "Page size", required = false),
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER)
+            },
+            responses = {
+                    @ApiResponse(description = "Top betters retrieved successfully", responseCode = "200",
+                            content = @Content(mediaType = "application/json",
+                                    schema = @Schema(implementation = PagedResponse.class)))
+            })
+    @GetMapping("/leaderboard/betters")
+    public ResponseEntity<PagedResponse<UserViewDTO>> getTopBetters(Pageable pageable) {
+        return ResponseEntity.ok(userService.getTopBetters(pageable));
+    }
+
+    @Operation(summary = "Get top users by points",
+            parameters = {
+                    @Parameter(name = "page", description = "Page number (0-indexed)", required = false),
+                    @Parameter(name = "size", description = "Page size", required = false),
+                    @Parameter(name = "Authorization",
+                            description = "Bearer token for authentication",
+                            required = true,
+                            in = ParameterIn.HEADER)
+            },
+            responses = {
+                    @ApiResponse(description = "Top users by points retrieved successfully", responseCode = "200",
+                            content = @Content(mediaType = "application/json",
+                                    schema = @Schema(implementation = PagedResponse.class)))
+            })
+    @GetMapping("/leaderboard/points")
+    public ResponseEntity<PagedResponse<UserViewDTO>> getTopPoints(Pageable pageable) {
+        return ResponseEntity.ok(userService.getTopPoints(pageable));
+    }
+
 }
