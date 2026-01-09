@@ -81,12 +81,30 @@ public class FixtureService {
     @Cacheable(value = "publicFixtures")
     public List<FixtureViewDTO> getPublicFixtures() {
         log.info("Fetching public fixtures from database (cache miss)");
+        
+        // Check if current user is admin
+        boolean isAdmin = false;
+        try {
+            User currentUser = securityContext.getCurrentUser();
+            isAdmin = currentUser.getRoles().stream()
+                    .anyMatch(role -> role.getRole() == Role.ADMIN);
+        } catch (Exception e) {
+            // If user is not authenticated or not found, treat as non-admin
+            log.debug("User not authenticated or not found in getPublicFixtures, treating as non-admin");
+        }
+        
+        final boolean finalIsAdmin = isAdmin;
         LocalDate today = LocalDate.now();
         LocalDate weekFromNow = today.plusDays(7);
         
         return fixtureRepository.findAll().stream()
                 .filter(fixture -> {
-                    // Must have MatchSettings and showMatch must be true
+                    // If admin, show ALL matches (bypass all settings filters)
+                    if (finalIsAdmin) {
+                        return true; // Admins see everything
+                    }
+                    
+                    // For non-admins: Must have MatchSettings and showMatch must be true
                     if (fixture.getMatchSettings() == null || 
                         !Boolean.TRUE.equals(fixture.getMatchSettings().getShowMatch())) {
                         return false;
