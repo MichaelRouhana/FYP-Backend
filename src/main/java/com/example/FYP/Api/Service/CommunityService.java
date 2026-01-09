@@ -610,15 +610,18 @@ public class CommunityService {
     /**
      * Promote a user to MODERATOR role in a community
      * Only OWNER (creator) can promote members
-     * Purely SQL-driven approach - bypasses JPA mapping issues
+     * Uses JPA entities to match getModerators logic
      */
     @Transactional
     public void promoteToModerator(Long communityId, Long userId, User requester) {
-        // Verify community exists
+        // 1. Fetch Community and User
         Community community = communityRepository.findById(communityId)
                 .orElseThrow(() -> new EntityNotFoundException("Community not found"));
+        
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
 
-        // Check 1: Permission - Only creator can promote
+        // 2. Permission checks - Only creator can promote
         if (community.getCreator() == null) {
             throw ApiRequestException.badRequest("Community has no creator. Cannot determine permissions.");
         }
@@ -627,30 +630,53 @@ public class CommunityService {
             throw ApiRequestException.badRequest("Only community OWNER (creator) can promote members");
         }
 
-        // Check 2: Existence - Verify user is a member of the community (SQL-driven)
-        if (!communityRepository.existsByCommunityIdAndUserId(communityId, userId)) {
-            throw ApiRequestException.badRequest("User is not a member of this community");
+        // 3. Find or Create the MODERATOR Role for this community
+        List<CommunityRole> existingModeratorRoles = roleRepository.findByCommunityIdAndRole(communityId, CommunityRoles.MODERATOR);
+        CommunityRole moderatorRole;
+        
+        if (existingModeratorRoles.isEmpty()) {
+            // Create new MODERATOR role for this community
+            moderatorRole = CommunityRole.builder()
+                    .role(CommunityRoles.MODERATOR)
+                    .community(community)
+                    .build();
+            moderatorRole = roleRepository.save(moderatorRole);
+            log.info("📝 Created new MODERATOR role for community {}", communityId);
+        } else {
+            // Use existing MODERATOR role
+            moderatorRole = existingModeratorRoles.get(0);
         }
 
-        // Execute Update: Direct SQL update - fire and forget
-        log.info("🔄 Promoting user {} to MODERATOR in community {} using native SQL query", userId, communityId);
-        communityRepository.updateMemberRole(communityId, userId, "MODERATOR");
+        // 4. Assign Role - Check if user already has MODERATOR role for this community
+        boolean alreadyHasModeratorRole = user.getCommunityRoles().stream()
+                .anyMatch(role -> role.getCommunity() != null 
+                        && role.getCommunity().getId().equals(communityId)
+                        && role.getRole() == CommunityRoles.MODERATOR);
         
-        log.info("✅ User {} promoted to MODERATOR in community {}. Role updated in database.", userId, communityId);
+        if (!alreadyHasModeratorRole) {
+            user.getCommunityRoles().add(moderatorRole);
+            userRepository.save(user);
+            log.info("✅ User {} promoted to MODERATOR in community {}. Role assigned via JPA.", userId, communityId);
+        } else {
+            log.info("ℹ️ User {} already has MODERATOR role in community {}", userId, communityId);
+        }
     }
 
     /**
      * Demote a MODERATOR back to regular MEMBER
      * Only OWNER (creator) can demote moderators
-     * Purely SQL-driven approach - bypasses JPA mapping issues
+     * Uses JPA entities to match getModerators logic
      */
     @Transactional
     public void demoteToMember(Long communityId, Long userId, User requester) {
-        // Verify community exists
+        // 1. Fetch Community and User
         Community community = communityRepository.findById(communityId)
                 .orElseThrow(() -> new EntityNotFoundException("Community not found"));
+        
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
 
-        // Check 1: Permission - Only creator can demote
+        // 2. Permission checks - Only creator can demote
         if (community.getCreator() == null) {
             throw ApiRequestException.badRequest("Community has no creator. Cannot determine permissions.");
         }
@@ -664,15 +690,27 @@ public class CommunityService {
             throw ApiRequestException.badRequest("Cannot demote the community OWNER (creator)");
         }
 
-        // Check 2: Existence - Verify user is a member of the community (SQL-driven)
-        if (!communityRepository.existsByCommunityIdAndUserId(communityId, userId)) {
-            throw ApiRequestException.badRequest("User is not a member of this community");
+        // 3. Find the MODERATOR role for this community
+        List<CommunityRole> moderatorRoles = roleRepository.findByCommunityIdAndRole(communityId, CommunityRoles.MODERATOR);
+        
+        if (moderatorRoles.isEmpty()) {
+            log.info("ℹ️ No MODERATOR role found for community {}. User {} may not be a moderator.", communityId, userId);
+            return; // Nothing to demote
         }
 
-        // Execute Update: Direct SQL update - fire and forget
-        log.info("🔄 Demoting user {} to MEMBER in community {} using native SQL query", userId, communityId);
-        communityRepository.updateMemberRole(communityId, userId, "MEMBER");
+        CommunityRole moderatorRole = moderatorRoles.get(0);
+
+        // 4. Remove Role - Find and remove MODERATOR role for this community from user's roles
+        boolean removed = user.getCommunityRoles().removeIf(role -> 
+                role.getCommunity() != null 
+                && role.getCommunity().getId().equals(communityId)
+                && role.getRole() == CommunityRoles.MODERATOR);
         
-        log.info("✅ User {} demoted from MODERATOR to MEMBER in community {}. Role updated in database.", userId, communityId);
+        if (removed) {
+            userRepository.save(user);
+            log.info("✅ User {} demoted from MODERATOR to MEMBER in community {}. Role removed via JPA.", userId, communityId);
+        } else {
+            log.info("ℹ️ User {} does not have MODERATOR role in community {}", userId, communityId);
+        }
     }
 }
