@@ -507,7 +507,8 @@ public class CommunityService {
                                 if (!role.getCommunity().getId().equals(communityId)) return false;
                                 return role.getRole() == CommunityRoles.OWNER;
                             });
-                    if (hasOwnerRole && moderators.stream().noneMatch(m -> m.getId().equals(user.getId()))) {
+                    // Compare Long (from DTO) with long (from User entity) - use == with null check
+                    if (hasOwnerRole && moderators.stream().noneMatch(m -> m.getId() != null && m.getId() == user.getId())) {
                         moderators.add(0, mapUserToDTO(user, communityId)); // Add OWNER at the beginning
                         log.info("✅ Added missing OWNER to moderators list for community {}", communityId);
                     }
@@ -619,8 +620,8 @@ public class CommunityService {
         // Fix Permission Check: Ensure creator is not null before checking ID
         boolean isOwner = false;
         if (community.getCreator() != null) {
-            // Check if requester is the creator
-            isOwner = community.getCreator().getId().equals(requester.getId());
+            // Check if requester is the creator (use == for primitive long comparison)
+            isOwner = community.getCreator().getId() == requester.getId();
             log.debug("Checking creator permission: creatorId={}, requesterId={}, isOwner={}", 
                     community.getCreator().getId(), requester.getId(), isOwner);
         } else {
@@ -696,8 +697,8 @@ public class CommunityService {
         // Fix Permission Check: Ensure creator is not null before checking ID
         boolean isOwner = false;
         if (community.getCreator() != null) {
-            // Check if requester is the creator
-            isOwner = community.getCreator().getId().equals(requester.getId());
+            // Check if requester is the creator (use == for primitive long comparison)
+            isOwner = community.getCreator().getId() == requester.getId();
             log.debug("Checking creator permission for demote: creatorId={}, requesterId={}, isOwner={}", 
                     community.getCreator().getId(), requester.getId(), isOwner);
         } else {
@@ -712,8 +713,8 @@ public class CommunityService {
             throw ApiRequestException.badRequest("Only community OWNER (creator) can demote moderators");
         }
 
-        // Prevent demoting the OWNER/creator
-        if (community.getCreator() != null && community.getCreator().getId().equals(userId)) {
+        // Prevent demoting the OWNER/creator (use == for primitive long comparison - auto-unboxes Long to long)
+        if (community.getCreator() != null && community.getCreator().getId() == userId) {
             throw ApiRequestException.badRequest("Cannot demote the community OWNER (creator)");
         }
 
