@@ -416,11 +416,11 @@ public class  CommunityController {
                     @ApiResponse(description = "Access denied - Only OWNER can promote", responseCode = "403"),
                     @ApiResponse(description = "User not found or not a member", responseCode = "404")
             })
-    @RequiredRole({CommunityRoles.OWNER})
+    // Permission check is handled in service method (checks if requester is creator)
     @PutMapping("/{communityId}/promote/{userId}")
     public ResponseEntity<Map<String, String>> promoteToModerator(
-            @PathVariable Long communityId,
-            @PathVariable Long userId) {
+            @PathVariable("communityId") Long communityId,
+            @PathVariable("userId") Long userId) {
         User requester = securityContext.getCurrentUser();
         communityService.promoteToModerator(communityId, userId, requester);
         return ResponseEntity.ok(Map.of("message", "User promoted to moderator successfully"));
@@ -440,11 +440,11 @@ public class  CommunityController {
                     @ApiResponse(description = "Access denied - Only OWNER can demote", responseCode = "403"),
                     @ApiResponse(description = "User not found or not a moderator", responseCode = "404")
             })
-    @RequiredRole({CommunityRoles.OWNER})
+    // Permission check is handled in service method (checks if requester is creator)
     @PutMapping("/{communityId}/demote/{userId}")
     public ResponseEntity<Map<String, String>> demoteToMember(
-            @PathVariable Long communityId,
-            @PathVariable Long userId) {
+            @PathVariable("communityId") Long communityId,
+            @PathVariable("userId") Long userId) {
         User requester = securityContext.getCurrentUser();
         communityService.demoteToMember(communityId, userId, requester);
         return ResponseEntity.ok(Map.of("message", "User demoted to member successfully"));
