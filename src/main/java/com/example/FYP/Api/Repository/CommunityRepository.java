@@ -28,7 +28,7 @@ public interface CommunityRepository extends JpaRepository<Community, Long> {
      * Native query to update member role directly in community_users table
      * This bypasses JPA mapping issues for the join table
      */
-    @Modifying
+    @Modifying(clearAutomatically = true)
     @Transactional
     @Query(value = "UPDATE community_users SET role = :role WHERE community_id = :communityId AND user_id = :userId", nativeQuery = true)
     void updateMemberRole(@Param("communityId") Long communityId, @Param("userId") Long userId, @Param("role") String role);
