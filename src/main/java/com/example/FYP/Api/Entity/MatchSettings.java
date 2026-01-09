@@ -20,13 +20,13 @@ public class MatchSettings {
 
     @Column(nullable = false)
     @Builder.Default
-    private Boolean allowBettingHT = false;
+    private Boolean allowBettingHT = true;
 
     @Column(nullable = false)
     @Builder.Default
-    private Boolean showMatch = false;
+    private Boolean showMatch = true;
 
     @Column(nullable = false)
     @Builder.Default
-    private Boolean allowBetting = false;
+    private Boolean allowBetting = true;
 }

@@ -3,6 +3,7 @@ package com.example.FYP.Api.Service;
 import com.example.FYP.Api.Entity.Bet;
 import com.example.FYP.Api.Entity.BetStatus;
 import com.example.FYP.Api.Entity.Fixture;
+import com.example.FYP.Api.Entity.MatchSettings;
 import com.example.FYP.Api.Entity.User;
 import com.example.FYP.Api.Exception.ApiRequestException;
 import com.example.FYP.Api.Exception.ResourceNotFoundException;
@@ -75,8 +76,33 @@ public class BetService {
             Fixture fixture = fixtureRepository.findById(leg.getFixtureId())
                     .orElseThrow(() -> ApiRequestException.badRequest("Fixture not found"));
 
-            if (!Boolean.TRUE.equals(fixture.getMatchSettings().getAllowBetting())) {
-                throw ApiRequestException.badRequest("Cannot bet on fixture: " + leg.getFixtureId());
+            // Validate Match Settings - CRITICAL: Enforce betting restrictions
+            MatchSettings settings = fixture.getMatchSettings();
+            if (settings == null) {
+                // If settings don't exist, create with defaults (shouldn't happen, but safety check)
+                settings = MatchSettings.builder()
+                        .allowBetting(true)
+                        .allowBettingHT(true)
+                        .showMatch(true)
+                        .build();
+                fixture.setMatchSettings(settings);
+                fixtureRepository.save(fixture);
+            }
+            
+            // 1. Global Betting Switch
+            if (!Boolean.TRUE.equals(settings.getAllowBetting())) {
+                throw ApiRequestException.badRequest("Betting is currently disabled for this match.");
+            }
+            
+            // 2. Halftime Betting Switch
+            // Check if match status is "HT" (Half Time) or other halftime statuses
+            String statusShort = fixture.getStatusShort();
+            if (statusShort != null && ("HT".equalsIgnoreCase(statusShort) || 
+                    "1H".equalsIgnoreCase(statusShort) || 
+                    "2H".equalsIgnoreCase(statusShort))) {
+                if (!Boolean.TRUE.equals(settings.getAllowBettingHT())) {
+                    throw ApiRequestException.badRequest("Halftime betting is disabled for this match.");
+                }
             }
 
             Bet bet = Bet.builder()

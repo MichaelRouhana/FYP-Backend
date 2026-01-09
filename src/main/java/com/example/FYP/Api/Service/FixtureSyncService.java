@@ -78,18 +78,20 @@ public class FixtureSyncService {
                     // Update the rawJson
                     fixture.setRawJson(matchNode.toString());
                     
+                    // Ensure MatchSettings exist (auto-create if missing)
+                    if (fixture.getMatchSettings() == null) {
+                        fixture.setMatchSettings(MatchSettings.builder()
+                                .allowBetting(true)
+                                .allowBettingHT(true)
+                                .showMatch(true)
+                                .build());
+                    }
+                    
                     // If status changed to finished, disable betting
                     if (!oldStatus.equals(newStatus) && FINISHED_STATUSES.contains(newStatus)) {
-                        if (fixture.getMatchSettings() == null) {
-                            fixture.setMatchSettings(MatchSettings.builder()
-                                    .allowBetting(false)
-                                    .allowBettingHT(false)
-                                    .showMatch(true)
-                                    .build());
-                        } else {
-                            fixture.getMatchSettings().setAllowBetting(false);
-                            fixture.getMatchSettings().setAllowBettingHT(false);
-                        }
+                        fixture.getMatchSettings().setAllowBetting(false);
+                        fixture.getMatchSettings().setAllowBettingHT(false);
+                        // Keep showMatch as true (admin can still see finished matches)
                         finishedCount++;
                         log.info("Fixture {} finished ({} -> {}), betting disabled", 
                                 fixtureId, oldStatus, newStatus);
@@ -106,9 +108,9 @@ public class FixtureSyncService {
                             .id(fixtureId)
                             .rawJson(matchNode.toString())
                             .matchSettings(MatchSettings.builder()
-                                    .allowBetting(!isFinished)
-                                    .allowBettingHT(false)
-                                    .showMatch(true)
+                                    .allowBetting(!isFinished) // Disable if already finished
+                                    .allowBettingHT(true) // Default to true (can be changed by admin)
+                                    .showMatch(true) // Default to true (can be changed by admin)
                                     .build())
                             .matchPredictionSettings(defaultPredictionSettings())
                             .build();

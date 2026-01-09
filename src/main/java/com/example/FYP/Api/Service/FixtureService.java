@@ -6,6 +6,8 @@ import com.example.FYP.Api.Entity.MatchPredictionSettings;
 import com.example.FYP.Api.Entity.MatchSettings;
 import com.example.FYP.Api.Entity.User;
 import com.example.FYP.Api.Mapper.FixtureMapper;
+import com.example.FYP.Api.Model.Constant.Role;
+import com.example.FYP.Api.Security.SecurityContext;
 import com.example.FYP.Api.Model.Patch.MatchPredictionSettingsPatchDTO;
 import com.example.FYP.Api.Model.Patch.MatchSettingsPatchDTO;
 import com.example.FYP.Api.Model.View.FixtureViewDTO;
@@ -41,9 +43,39 @@ public class FixtureService {
     private final ModelMapper modelMapper;
     private final FixtureMapper fixtureMapper;
     private final ObjectMapper objectMapper;
+    private final SecurityContext securityContext;
 
     public List<FixtureViewDTO> getAllFixtures() {
-        return fixtureMapper.toDTOs(fixtureRepository.findAll());
+        // Check if current user is admin
+        boolean isAdmin = false;
+        try {
+            User currentUser = securityContext.getCurrentUser();
+            isAdmin = currentUser.getRoles().stream()
+                    .anyMatch(role -> role.getRole() == Role.ADMIN);
+        } catch (Exception e) {
+            // If user is not authenticated or not found, treat as non-admin
+            log.debug("User not authenticated or not found, treating as non-admin");
+        }
+        
+        final boolean finalIsAdmin = isAdmin;
+        
+        return fixtureRepository.findAll().stream()
+                .filter(fixture -> {
+                    // If admin, show all fixtures (including hidden ones)
+                    if (finalIsAdmin) {
+                        return true;
+                    }
+                    
+                    // If non-admin or guest, only show fixtures where showMatch == true
+                    MatchSettings settings = fixture.getMatchSettings();
+                    if (settings == null) {
+                        // If no settings exist, default to showing (for backward compatibility)
+                        return true;
+                    }
+                    return Boolean.TRUE.equals(settings.getShowMatch());
+                })
+                .map(fixtureMapper::toDTO)
+                .toList();
     }
 
     @Cacheable(value = "publicFixtures")
