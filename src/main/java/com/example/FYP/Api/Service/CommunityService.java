@@ -58,10 +58,22 @@ public class CommunityService {
         }
 
         // Map DTO fields to entity
-        // Use description if provided, otherwise fall back to about
-        String description = communityDTO.getDescription() != null 
-                ? communityDTO.getDescription() 
-                : communityDTO.getAbout();
+        // Combine shortDescription and description if both are provided
+        String description;
+        if (communityDTO.getDescription() != null && !communityDTO.getDescription().trim().isEmpty()) {
+            if (communityDTO.getShortDescription() != null && !communityDTO.getShortDescription().trim().isEmpty()) {
+                // Combine short and full description
+                description = communityDTO.getShortDescription().trim() + "\n\n" + communityDTO.getDescription().trim();
+            } else {
+                // Use full description only
+                description = communityDTO.getDescription().trim();
+            }
+        } else if (communityDTO.getAbout() != null && !communityDTO.getAbout().trim().isEmpty()) {
+            // Fallback to legacy about field
+            description = communityDTO.getAbout().trim();
+        } else {
+            throw ApiRequestException.badRequest("Community description is required");
+        }
 
         // Handle file upload if provided
         String logoUrl = null;
@@ -86,37 +98,56 @@ public class CommunityService {
             inviteCode = java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }
 
+        User user = securityContext.getCurrentUser();
+
+        // Create Community entity (without roles initially)
         Community community = Community.builder()
                 .name(communityDTO.getName())
                 .logo(logoUrl)
                 .location(communityDTO.getLocation())
-                .about(description) // Map description to about field
+                .about(description) // Map combined description to about field
                 .inviteCode(inviteCode)
-                .users(new ArrayList<>(List.of(securityContext.getCurrentUser())))
+                .users(new ArrayList<>(List.of(user)))
                 .rules(communityDTO.getRules())
+                .creator(user) // Set creator
                 .build();
 
         // Set createdAt is handled by AuditableEntity
         // memberCount is derived from users.size() (starts with 1 - the admin creator)
 
-        CommunityRole role = CommunityRole.builder().role(CommunityRoles.OWNER).community(community).build();
-        CommunityRole roleMember = CommunityRole.builder().role(CommunityRoles.MEMBER).community(community).build();
+        // CRITICAL: Save the Community FIRST before creating roles
+        // This ensures the Community has a persisted ID
+        Community savedCommunity = communityRepository.save(community);
+        log.info("✅ Community '{}' saved with ID: {}", savedCommunity.getName(), savedCommunity.getId());
 
-        User user = securityContext.getCurrentUser();
+        // Now create CommunityRole objects with the persisted Community
+        CommunityRole ownerRole = CommunityRole.builder()
+                .role(CommunityRoles.OWNER)
+                .community(savedCommunity) // Use persisted community
+                .build();
+        
+        CommunityRole memberRole = CommunityRole.builder()
+                .role(CommunityRoles.MEMBER)
+                .community(savedCommunity) // Use persisted community
+                .build();
 
-        // Set the creator of the community
-        community.setCreator(user);
+        // Save the roles to get their IDs
+        CommunityRole savedOwnerRole = roleRepository.save(ownerRole);
+        CommunityRole savedMemberRole = roleRepository.save(memberRole);
+        log.info("✅ Community roles created: OWNER (ID: {}), MEMBER (ID: {})", 
+                savedOwnerRole.getId(), savedMemberRole.getId());
 
-        user.getCommunityRoles().addAll(new HashSet<>(List.of(role, roleMember)));
+        // Now associate roles with the community and user
+        savedCommunity.setRoles(new HashSet<>(List.of(savedOwnerRole, savedMemberRole)));
+        user.getCommunityRoles().addAll(new HashSet<>(List.of(savedOwnerRole, savedMemberRole)));
 
-        community.setRoles(new HashSet<>(List.of(role, roleMember)));
-
-        // Save user to persist role associations
+        // Save the updated entities
+        communityRepository.save(savedCommunity);
         userRepository.save(user);
         
-        Community saved = communityRepository.save(community);
-        log.info("✅ Community '{}' created by user {} (ID: {})", saved.getName(), user.getUsername(), user.getId());
-        return mapToDTO(saved);
+        log.info("✅ Community '{}' created by user {} (ID: {})", 
+                savedCommunity.getName(), user.getUsername(), user.getId());
+        return mapToDTO(savedCommunity);
     }
 
     /**
