@@ -32,4 +32,10 @@ public interface CommunityRepository extends JpaRepository<Community, Long> {
     @Transactional
     @Query(value = "UPDATE community_users SET role = :role WHERE community_id = :communityId AND user_id = :userId", nativeQuery = true)
     void updateMemberRole(@Param("communityId") Long communityId, @Param("userId") Long userId, @Param("role") String role);
+    
+    /**
+     * Check if a user is a member of a community (SQL-driven, bypasses JPA mapping)
+     */
+    @Query(value = "SELECT COUNT(*) > 0 FROM community_users WHERE community_id = :communityId AND user_id = :userId", nativeQuery = true)
+    boolean existsByCommunityIdAndUserId(@Param("communityId") Long communityId, @Param("userId") Long userId);
 }
