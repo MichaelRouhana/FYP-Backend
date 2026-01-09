@@ -51,6 +51,9 @@ public class Community extends AuditableEntity{
     )
     private List<User> users;
 
+    @ManyToOne
+    @JoinColumn(name = "creator_id")
+    private User creator;
 
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "community", cascade = {CascadeType.ALL, CascadeType.REMOVE}, orphanRemoval = true)
     @JsonIgnore
