@@ -30,12 +30,13 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     Page<User> findAllByOrderByPointsDesc(Pageable pageable);
 
     // Find top betters (users sorted by number of won bets)
+    // Using native query to count won bets per user
     @Query(value = """
         SELECT u.*
         FROM users u
         LEFT JOIN (
             SELECT user_id, COUNT(*) as win_count
-            FROM bets
+            FROM bet
             WHERE status = :status
             GROUP BY user_id
         ) wins ON u.id = wins.user_id
