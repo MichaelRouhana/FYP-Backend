@@ -17,6 +17,12 @@ import org.springframework.data.domain.Sort;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -33,16 +39,58 @@ public class DashBoardService {
 
 
     public List<ChartPoint> totalUsers() {
-        List<User> users = userRepository.findAll();
-        return usersPerDate(users);
+        // Get last 7 days for the chart
+        LocalDateTime startDate = LocalDateTime.now().minusDays(7);
+        
+        // Fetch users created in the last 7 days (optimized query)
+        List<User> recentUsers = userRepository.findByCreatedDateAfter(startDate);
+        
+        // Get total count of users created BEFORE the start date (for cumulative calculation)
+        long usersBeforeStart = userRepository.countByCreatedDateBefore(startDate);
+        
+        log.info("📊 User Stats - Users before start date: {}, Recent users: {}", usersBeforeStart, recentUsers.size());
+        
+        // Group by date (daily new users) - handle timezone properly
+        Map<LocalDate, Long> dailyNewUsers = recentUsers.stream()
+                .filter(u -> u.getCreatedDate() != null)
+                .collect(Collectors.groupingBy(
+                        u -> u.getCreatedDate().atZone(ZoneId.systemDefault()).toLocalDate(),
+                        Collectors.counting()
+                ));
+        
+        log.info("📊 User Stats Raw Data (Daily New): {}", dailyNewUsers);
+        
+        // Fill in missing days and calculate cumulative totals
+        return buildCumulativeChart(dailyNewUsers, usersBeforeStart, 7);
     }
 
-    //TODO
     public List<ChartPoint> totalActiveUsers() {
-        List<User> users = userRepository.findAll().stream()
-                //.filter(User::getActive)
-                .collect(Collectors.toList());
-        return usersPerDate(users);
+        // Get last 7 days for the chart
+        LocalDateTime startDate = LocalDateTime.now().minusDays(7);
+        
+        // For now, treat all users as "active" (TODO: implement actual active filter)
+        // Use optimized query instead of fetching all users
+        List<User> recentUsers = userRepository.findByCreatedDateAfter(startDate);
+        // TODO: Add active filter when available: .filter(User::getActive)
+        
+        // Get total count of active users created BEFORE the start date
+        long activeUsersBeforeStart = userRepository.countByCreatedDateBefore(startDate);
+        // TODO: Add active filter when available
+        
+        log.info("📊 Active User Stats - Users before start date: {}, Recent users: {}", activeUsersBeforeStart, recentUsers.size());
+        
+        // Group by date (daily new active users) - handle timezone properly
+        Map<LocalDate, Long> dailyNewActiveUsers = recentUsers.stream()
+                .filter(u -> u.getCreatedDate() != null)
+                .collect(Collectors.groupingBy(
+                        u -> u.getCreatedDate().atZone(ZoneId.systemDefault()).toLocalDate(),
+                        Collectors.counting()
+                ));
+        
+        log.info("📊 Active User Stats Raw Data (Daily New): {}", dailyNewActiveUsers);
+        
+        // Fill in missing days and calculate cumulative totals
+        return buildCumulativeChart(dailyNewActiveUsers, activeUsersBeforeStart, 7);
     }
 
     public List<ChartPoint> getTotalBets() {
@@ -168,10 +216,45 @@ public class DashBoardService {
                 .build();
     }
 
+    /**
+     * Build cumulative chart with filled-in missing days
+     * @param dailyData Map of date -> daily count
+     * @param initialCount Users created before the date range
+     * @param days Number of days to show (default 7)
+     * @return List of ChartPoint with cumulative totals and all days filled
+     */
+    private List<ChartPoint> buildCumulativeChart(Map<LocalDate, Long> dailyData, long initialCount, int days) {
+        LocalDate today = LocalDate.now();
+        LocalDate startDate = today.minusDays(days - 1);
+        
+        List<ChartPoint> chartPoints = new ArrayList<>();
+        long runningTotal = initialCount;
+        
+        // Iterate through each day from startDate to today
+        for (int i = 0; i < days; i++) {
+            LocalDate currentDate = startDate.plusDays(i);
+            long dailyCount = dailyData.getOrDefault(currentDate, 0L);
+            runningTotal += dailyCount;
+            
+            // Format date as string (YYYY-MM-DD)
+            String dateStr = currentDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+            chartPoints.add(new ChartPoint(dateStr, runningTotal));
+        }
+        
+        log.info("📊 User Stats Final Chart Points: {}", chartPoints);
+        return chartPoints;
+    }
+    
+    /**
+     * Legacy method - kept for backward compatibility
+     * @deprecated Use buildCumulativeChart instead
+     */
+    @Deprecated
     private List<ChartPoint> usersPerDate(List<User> users) {
         Map<String, Long> grouped = users.stream()
+                .filter(u -> u.getCreatedDate() != null)
                 .collect(Collectors.groupingBy(
-                        u -> u.getCreatedDate().toLocalDate().toString(),
+                        u -> u.getCreatedDate().atZone(ZoneId.systemDefault()).toLocalDate().toString(),
                         Collectors.counting()
                 ));
 
@@ -182,15 +265,50 @@ public class DashBoardService {
     }
 
     private List<ChartPoint> betsPerDate(List<Bet> bets) {
-        Map<String, Long> grouped = bets.stream()
+        // Get last 7 days for the chart
+        LocalDateTime startDate = LocalDateTime.now().minusDays(7);
+        
+        // Filter bets from last 7 days
+        List<Bet> recentBets = bets.stream()
+                .filter(b -> b.getCreatedDate() != null && b.getCreatedDate().isAfter(startDate))
+                .collect(Collectors.toList());
+        
+        // Group by date (daily new bets)
+        Map<LocalDate, Long> dailyBets = recentBets.stream()
+                .filter(b -> b.getCreatedDate() != null)
                 .collect(Collectors.groupingBy(
-                        b -> b.getCreatedDate().toLocalDate().toString(),
+                        b -> b.getCreatedDate().atZone(ZoneId.systemDefault()).toLocalDate(),
                         Collectors.counting()
                 ));
-
-        return grouped.entrySet().stream()
-                .map(e -> new ChartPoint(e.getKey(), e.getValue()))
-                .sorted((a, b) -> a.getX().compareTo(b.getX()))
-                .collect(Collectors.toList());
+        
+        log.info("📊 Bet Stats Raw Data (Daily): {}", dailyBets);
+        
+        // Fill in missing days (for bets, we show daily counts, not cumulative)
+        return buildDailyChart(dailyBets, 7);
+    }
+    
+    /**
+     * Build daily chart with filled-in missing days (non-cumulative)
+     * @param dailyData Map of date -> daily count
+     * @param days Number of days to show (default 7)
+     * @return List of ChartPoint with daily counts and all days filled
+     */
+    private List<ChartPoint> buildDailyChart(Map<LocalDate, Long> dailyData, int days) {
+        LocalDate today = LocalDate.now();
+        LocalDate startDate = today.minusDays(days - 1);
+        
+        List<ChartPoint> chartPoints = new ArrayList<>();
+        
+        // Iterate through each day from startDate to today
+        for (int i = 0; i < days; i++) {
+            LocalDate currentDate = startDate.plusDays(i);
+            long dailyCount = dailyData.getOrDefault(currentDate, 0L);
+            
+            // Format date as string (YYYY-MM-DD)
+            String dateStr = currentDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+            chartPoints.add(new ChartPoint(dateStr, dailyCount));
+        }
+        
+        return chartPoints;
     }
 }

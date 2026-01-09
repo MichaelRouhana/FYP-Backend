@@ -60,4 +60,12 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     @Query("SELECT u FROM User u JOIN u.communities o WHERE u.email = :email AND o.id = :communityId")
     Optional<User> findByEmailAndCommunityId(@Param("email") String email, @Param("communityId") Long communityId);
 
+    // Find users created after a specific date (for dashboard charts)
+    @Query("SELECT u FROM User u WHERE u.createdDate >= :startDate ORDER BY u.createdDate ASC")
+    List<User> findByCreatedDateAfter(@Param("startDate") java.time.LocalDateTime startDate);
+    
+    // Count users created before a specific date (for cumulative calculations)
+    @Query("SELECT COUNT(u) FROM User u WHERE u.createdDate < :startDate")
+    long countByCreatedDateBefore(@Param("startDate") java.time.LocalDateTime startDate);
+
 }
