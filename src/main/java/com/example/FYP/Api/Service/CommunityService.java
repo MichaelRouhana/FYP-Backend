@@ -108,6 +108,9 @@ public class CommunityService {
 
         community.setRoles(new HashSet<>(List.of(role, roleMember)));
 
+        // Save user to persist role associations
+        userRepository.save(user);
+        
         Community saved = communityRepository.save(community);
         return mapToDTO(saved);
     }
@@ -456,25 +459,59 @@ public class CommunityService {
 
     /**
      * Get moderators (OWNER and MODERATOR roles) for a community
+     * Ensures the creator (OWNER) is always included
      */
     private List<UserViewDTO> getModeratorsForCommunity(Community community) {
         Long communityId = community.getId();
         
-        // Get all members of the community and filter by roles
-        // More efficient: Query from community's users instead of roles
-        return community.getUsers().stream()
+        // Query from community's users and filter by roles
+        // This is the most reliable approach as it queries from the owning side (User.communityRoles)
+        List<User> moderatorUsers = community.getUsers().stream()
                 .filter(user -> {
-                    // Check if user has OWNER or MODERATOR role for this community
+                    // Check if user has OWNER or MODERATOR role for this specific community
                     return user.getCommunityRoles().stream()
                             .anyMatch(role -> {
                                 if (role.getCommunity() == null) return false;
                                 if (!role.getCommunity().getId().equals(communityId)) return false;
-                                return role.getRole() == CommunityRoles.OWNER || 
-                                       role.getRole() == CommunityRoles.MODERATOR;
+                                CommunityRoles roleType = role.getRole();
+                                return roleType == CommunityRoles.OWNER || 
+                                       roleType == CommunityRoles.MODERATOR;
                             });
                 })
+                .distinct()
+                .toList();
+        
+        // Map to UserViewDTO
+        List<UserViewDTO> moderators = moderatorUsers.stream()
                 .map(user -> mapUserToDTO(user, communityId))
                 .toList();
+        
+        // Ensure creator (OWNER) is always included
+        // If no OWNER found, log warning (this should not happen if community was created properly)
+        boolean hasOwner = moderators.stream().anyMatch(m -> m.getRoles() != null && m.getRoles().contains("OWNER"));
+        if (!hasOwner && !community.getUsers().isEmpty()) {
+            log.warn("⚠️ No OWNER found for community {} (ID: {}). Creator might not have OWNER role assigned.", 
+                    community.getName(), communityId);
+            // Try to find and add creator by checking role repository
+            List<CommunityRole> ownerRoles = roleRepository.findByCommunityIdAndRole(communityId, CommunityRoles.OWNER);
+            if (!ownerRoles.isEmpty()) {
+                // Find users with OWNER role by ID comparison
+                for (User user : community.getUsers()) {
+                    boolean hasOwnerRole = user.getCommunityRoles().stream()
+                            .anyMatch(role -> {
+                                if (role.getCommunity() == null) return false;
+                                if (!role.getCommunity().getId().equals(communityId)) return false;
+                                return role.getRole() == CommunityRoles.OWNER;
+                            });
+                    if (hasOwnerRole && moderators.stream().noneMatch(m -> m.getId().equals(user.getId()))) {
+                        moderators.add(0, mapUserToDTO(user, communityId)); // Add OWNER at the beginning
+                        log.info("✅ Added missing OWNER to moderators list for community {}", communityId);
+                    }
+                }
+            }
+        }
+        
+        return moderators;
     }
 
     /**
@@ -615,15 +652,19 @@ public class CommunityService {
             moderatorRole = roleRepository.save(moderatorRole);
             // Add role to community's roles set
             community.getRoles().add(moderatorRole);
+            communityRepository.save(community); // Save community to persist the relationship
         } else {
             moderatorRole = moderatorRoles.get(0);
         }
 
         // Assign MODERATOR role to user
+        // This ensures the user will appear in getCommunityById's moderators list
         if (!userToPromote.getCommunityRoles().contains(moderatorRole)) {
             userToPromote.getCommunityRoles().add(moderatorRole);
             userRepository.save(userToPromote);
-            log.info("✅ User {} promoted to MODERATOR in community {}", userId, communityId);
+            log.info("✅ User {} promoted to MODERATOR in community {}. User will now appear in moderators list.", userId, communityId);
+        } else {
+            log.warn("⚠️ User {} already has MODERATOR role for community {}", userId, communityId);
         }
     }
 
