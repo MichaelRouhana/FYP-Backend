@@ -1,9 +1,7 @@
 package com.example.FYP.Api.Filter;
 
-import com.example.FYP.Api.Exception.ApiException;
 import com.example.FYP.Api.Service.JwtService;
 import com.example.FYP.Api.Service.UserDetailsServiceImpl;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.security.SignatureException;
@@ -13,8 +11,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -39,84 +35,58 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        try {
-            String authHeader = request.getHeader("Authorization");
-            String token = null;
-            String username = null;
-            if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                token = authHeader.substring(7);
-                if (jwtService.isTokenExpired(token)) {
-                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "JWT expired");
-                    return;
-                }
+        String authHeader = request.getHeader("Authorization");
+        String token = null;
+        String username = null;
 
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            token = authHeader.substring(7);
+            
+            try {
+                // Attempt to extract username from token
+                // This will throw exceptions if token is expired, malformed, or has invalid signature
                 username = jwtService.extractUsername(token);
+            } catch (ExpiredJwtException ex) {
+                log.warn("Expired JWT token detected for request to: {} - proceeding as anonymous", request.getRequestURI());
+                // Don't set authentication, but allow request to proceed
+                // Public endpoints will work, protected endpoints will fail later with 403
+            } catch (MalformedJwtException ex) {
+                log.warn("Malformed JWT token detected for request to: {} - proceeding as anonymous", request.getRequestURI());
+                // Don't set authentication, but allow request to proceed
+                // Public endpoints will work, protected endpoints will fail later with 403
+            } catch (SignatureException ex) {
+                log.warn("Invalid JWT signature for request to: {} - proceeding as anonymous", request.getRequestURI());
+                // Don't set authentication, but allow request to proceed
+                // Public endpoints will work, protected endpoints will fail later with 403
+            } catch (Exception ex) {
+                log.warn("JWT parsing error for request to: {} - proceeding as anonymous. Error: {}", 
+                        request.getRequestURI(), ex.getMessage());
+                // Don't set authentication, but allow request to proceed
+                // Public endpoints will work, protected endpoints will fail later with 403
             }
+        }
 
-            if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+        // Only set authentication if we successfully extracted a username
+        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            try {
                 UserDetails userDetails = userDetailsServiceImpl.loadUserByUsername(username);
                 if (jwtService.validateToken(token, userDetails)) {
-                    UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                    UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
+                            userDetails, null, userDetails.getAuthorities());
                     authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authenticationToken);
                 }
-
+            } catch (Exception ex) {
+                log.warn("Failed to load user details for username: {} - proceeding as anonymous. Error: {}", 
+                        username, ex.getMessage());
+                // Don't set authentication, but allow request to proceed
             }
-
-            filterChain.doFilter(request, response);
-        } catch (ExpiredJwtException ex) {
-
-            handleExpiredJwtException(ex, request, response);
-        } catch (MalformedJwtException x) {
-            handleMalformedJwtException(x, request, response);
-
-        } catch (SignatureException exx) {
-            handleSignatureException(exx, request, response);
-
         }
+
+        // Always continue the filter chain
+        // Public endpoints will work, protected endpoints will be checked by Spring Security
+        filterChain.doFilter(request, response);
     }
 
-    private void handleExpiredJwtException(ExpiredJwtException ex, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        ApiException exception = ApiException.builder()
-                .status(HttpStatus.BAD_REQUEST)
-                .message(ex.getMessage())
-                .path(request.getRequestURI())
-                .code(HttpStatus.BAD_REQUEST.value())
-                .build();
-
-        response.setStatus(HttpStatus.BAD_REQUEST.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        ObjectMapper mapper = new ObjectMapper();
-        response.getWriter().write(mapper.writeValueAsString(exception));
-    }
-
-
-    private void handleSignatureException(SignatureException ex, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        ApiException exception = ApiException.builder()
-                .status(HttpStatus.BAD_REQUEST)
-                .message(ex.getMessage())
-                .code(HttpStatus.BAD_REQUEST.value())
-                .path(request.getRequestURI())
-                .build();
-
-        response.setStatus(HttpStatus.BAD_REQUEST.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        ObjectMapper mapper = new ObjectMapper();
-        response.getWriter().write(mapper.writeValueAsString(exception));
-    }
-
-    private void handleMalformedJwtException(MalformedJwtException ex, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        ApiException exception = ApiException.builder()
-                .status(HttpStatus.BAD_REQUEST)
-                .message(ex.getMessage())
-                .code(HttpStatus.BAD_REQUEST.value())
-                .path(request.getRequestURI())
-                .build();
-
-        response.setStatus(HttpStatus.BAD_REQUEST.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        ObjectMapper mapper = new ObjectMapper();
-        response.getWriter().write(mapper.writeValueAsString(exception));
-    }
 
 }
