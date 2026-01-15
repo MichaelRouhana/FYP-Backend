@@ -62,4 +62,21 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long>, JpaSpec
             "     f.raw_json LIKE '%\"short\":\"PEN\"%')",
             nativeQuery = true)
     List<Fixture> findFinishedFixturesWithPendingBets();
+
+    /**
+     * Finds the last finished match for a specific team.
+     * The team can be either home or away team.
+     * Returns the most recent finished match (FT, AET, PEN) ordered by fixture date descending.
+     * Uses JSON path to check teams.home.id and teams.away.id.
+     */
+    @Query(value = "SELECT * FROM fixtures f " +
+            "WHERE (CAST(JSON_EXTRACT(f.raw_json, '$.teams.home.id') AS UNSIGNED) = :teamId " +
+            "   OR CAST(JSON_EXTRACT(f.raw_json, '$.teams.away.id') AS UNSIGNED) = :teamId) " +
+            "AND (f.raw_json LIKE '%\"short\":\"FT\"%' OR " +
+            "     f.raw_json LIKE '%\"short\":\"AET\"%' OR " +
+            "     f.raw_json LIKE '%\"short\":\"PEN\"%') " +
+            "ORDER BY JSON_UNQUOTE(JSON_EXTRACT(f.raw_json, '$.fixture.date')) DESC " +
+            "LIMIT 1",
+            nativeQuery = true)
+    List<Fixture> findLastFinishedMatchByTeamId(@org.springframework.data.repository.query.Param("teamId") Long teamId);
 }
