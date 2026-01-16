@@ -1,5 +1,6 @@
 package com.example.FYP.Api.Controller;
 
+import com.example.FYP.Api.Loader.Annotation.Feature;
 import com.example.FYP.Api.Model.View.FixtureViewDTO;
 import com.example.FYP.Api.Model.View.Team.*;
 import com.example.FYP.Api.Service.TeamService;
@@ -15,6 +16,7 @@ import java.util.List;
 @RequestMapping("/api/v1/teams")
 @RequiredArgsConstructor
 @Tag(name = "Team Controller", description = "Provides detailed team information")
+@Feature
 public class TeamController {
 
     private final TeamService teamService;
