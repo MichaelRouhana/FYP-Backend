@@ -37,13 +37,6 @@ public class TeamService {
     private final String apiKey = "7aa48d98c402dc071bb8405ebbb722ec";
 
     /**
-     * Get team header information (alias method for controller)
-     */
-    public TeamHeaderDTO getHeader(Long teamId) {
-        return getTeamHeader(teamId);
-    }
-
-    /**
      * Get team header information
      */
     public TeamHeaderDTO getTeamHeader(Long teamId) {
@@ -245,38 +238,6 @@ public class TeamService {
                 .yellowCards(yellowCards)
                 .redCards(redCards)
                 .build();
-    }
-
-    /**
-     * Get standings for a team in a specific season and league
-     * Note: This is a placeholder implementation. Returns empty list for now.
-     * TODO: Implement actual standings fetching from API or database
-     */
-    public List<TeamStatsDTO> getStandings(Long teamId, int season, int league) {
-        try {
-            // TODO: Implement actual standings fetching
-            // For now, return empty list to prevent 404 errors
-            log.debug("Standings endpoint called for team ID {}, season {}, and league {}", teamId, season, league);
-            return Collections.emptyList();
-        } catch (Exception e) {
-            log.error("Error fetching standings for team ID {}, season {}, and league {}: {}", teamId, season, league, e.getMessage());
-            return Collections.emptyList();
-        }
-    }
-
-    /**
-     * Get standings for a team in a specific season (backward compatibility)
-     */
-    public List<StandingRowDTO> getStandings(Long teamId, int season) {
-        try {
-            // TODO: Implement actual standings fetching
-            // For now, return empty list to prevent 404 errors
-            log.debug("Standings endpoint called for team ID {} and season {}", teamId, season);
-            return Collections.emptyList();
-        } catch (Exception e) {
-            log.error("Error fetching standings for team ID {} and season {}: {}", teamId, season, e.getMessage());
-            return Collections.emptyList();
-        }
     }
 
     /**
