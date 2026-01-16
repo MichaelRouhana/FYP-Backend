@@ -59,5 +59,15 @@ public class TeamController {
         List<TrophyDTO> trophies = teamService.getTrophies(id);
         return ResponseEntity.ok(trophies);
     }
+
+    @Operation(summary = "Get team standings", description = "Returns standings for a team in a specific league/season")
+    @GetMapping("/{id}/standings")
+    public ResponseEntity<List<StandingRowDTO>> getStandings(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "2023") int season
+    ) {
+        List<StandingRowDTO> standings = teamService.getStandings(id, season);
+        return ResponseEntity.ok(standings);
+    }
 }
 

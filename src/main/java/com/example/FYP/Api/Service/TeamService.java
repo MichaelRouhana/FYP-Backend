@@ -241,6 +241,23 @@ public class TeamService {
     }
 
     /**
+     * Get standings for a team in a specific season
+     * Note: This is a placeholder implementation. Returns empty list for now.
+     * TODO: Implement actual standings fetching from API or database
+     */
+    public List<StandingRowDTO> getStandings(Long teamId, int season) {
+        try {
+            // TODO: Implement actual standings fetching
+            // For now, return empty list to prevent 404 errors
+            log.debug("Standings endpoint called for team ID {} and season {}", teamId, season);
+            return Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Error fetching standings for team ID {} and season {}: {}", teamId, season, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
      * Get trophies/honors for a team
      * Note: The API-Sports API may not have a dedicated trophies endpoint.
      * This method attempts to fetch trophies, but returns an empty list if not available.
