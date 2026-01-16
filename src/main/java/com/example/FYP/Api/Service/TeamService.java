@@ -241,6 +241,44 @@ public class TeamService {
     }
 
     /**
+     * Get team details including stadium information
+     */
+    public TeamDetailsDTO getTeamDetails(Long teamId) {
+        try {
+            // Fetch team info from FootballService
+            String jsonResponse = footBallService.getTeamInfo(teamId);
+            
+            if (jsonResponse == null || jsonResponse.isEmpty()) {
+                log.warn("No team info response for team ID: {}", teamId);
+                throw new EntityNotFoundException("Team not found with ID: " + teamId);
+            }
+
+            JsonNode root = objectMapper.readTree(jsonResponse);
+            JsonNode response = root.path("response");
+            
+            if (!response.isArray() || response.size() == 0) {
+                throw new EntityNotFoundException("Team not found with ID: " + teamId);
+            }
+
+            // Extract team and venue data
+            JsonNode teamData = response.get(0).path("team");
+            JsonNode venue = response.get(0).path("venue");
+
+            return TeamDetailsDTO.builder()
+                    .stadiumName(venue.path("name").asText(""))
+                    .stadiumImage(venue.path("image").asText(""))
+                    .city(venue.path("city").asText(""))
+                    .capacity(venue.path("capacity").asInt(0))
+                    .foundedYear(teamData.path("founded").asInt(0) == 0 ? null : teamData.path("founded").asInt(0))
+                    .description(null) // Description is not available in standard API response
+                    .build();
+        } catch (Exception e) {
+            log.error("Error fetching team details for ID {}: {}", teamId, e.getMessage());
+            throw new EntityNotFoundException("Failed to fetch team details: " + e.getMessage());
+        }
+    }
+
+    /**
      * Get trophies/honors for a team
      * Note: The API-Sports API may not have a dedicated trophies endpoint.
      * This method attempts to fetch trophies, but returns an empty list if not available.

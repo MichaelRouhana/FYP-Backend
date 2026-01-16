@@ -268,4 +268,39 @@ public String getFixturesByDate(String date) {
                 .nationality(coachData.path("nationality").asText(""))
                 .build();
     }
+
+    /**
+     * Fetches team information including team and venue details from the Football API.
+     * 
+     * @param teamId The team ID
+     * @return JSON response string containing team and venue information, or null if API call fails
+     */
+    public String getTeamInfo(Long teamId) {
+        try {
+            String url = "https://v3.football.api-sports.io/teams?id=" + teamId;
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.put("x-apisports-key", Collections.singletonList(apiKey));
+
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    entity,
+                    String.class
+            );
+
+            if (response.getBody() == null) {
+                log.warn("Empty response from team info API for team ID: {}", teamId);
+                return null;
+            }
+
+            log.debug("Fetched team info for team ID: {}", teamId);
+            return response.getBody();
+        } catch (Exception e) {
+            log.error("Error fetching team info for team ID {}: {}", teamId, e.getMessage());
+            return null;
+        }
+    }
 }

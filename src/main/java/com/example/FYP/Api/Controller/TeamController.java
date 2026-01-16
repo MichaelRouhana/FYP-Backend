@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/teams")
+@RequestMapping("/team")
 @RequiredArgsConstructor
 @Tag(name = "Team Controller", description = "Provides detailed team information")
 public class TeamController {
@@ -58,6 +58,12 @@ public class TeamController {
     public ResponseEntity<List<TrophyDTO>> getTrophies(@PathVariable Long id) {
         List<TrophyDTO> trophies = teamService.getTrophies(id);
         return ResponseEntity.ok(trophies);
+    }
+
+    @Operation(summary = "Get team details", description = "Returns detailed team information including stadium details, city, capacity, and founded year")
+    @GetMapping("/{teamId}/details")
+    public ResponseEntity<TeamDetailsDTO> getTeamDetails(@PathVariable Long teamId) {
+        return ResponseEntity.ok(teamService.getTeamDetails(teamId));
     }
 }
 
