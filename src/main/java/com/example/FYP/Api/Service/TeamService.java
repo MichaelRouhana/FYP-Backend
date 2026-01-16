@@ -264,13 +264,26 @@ public class TeamService {
             JsonNode teamData = response.get(0).path("team");
             JsonNode venue = response.get(0).path("venue");
 
+            // Extract venue capacity - handle null/0 values
+            Integer capacity = null;
+            int capacityValue = venue.path("capacity").asInt(0);
+            if (capacityValue > 0) {
+                capacity = capacityValue;
+            }
+
+            // Extract founded year - handle null/0 values
+            Integer foundedYear = null;
+            int foundedValue = teamData.path("founded").asInt(0);
+            if (foundedValue > 0) {
+                foundedYear = foundedValue;
+            }
+
             return TeamDetailsDTO.builder()
                     .stadiumName(venue.path("name").asText(""))
                     .stadiumImage(venue.path("image").asText(""))
                     .city(venue.path("city").asText(""))
-                    .capacity(venue.path("capacity").asInt(0))
-                    .foundedYear(teamData.path("founded").asInt(0) == 0 ? null : teamData.path("founded").asInt(0))
-                    .description(null) // Description is not available in standard API response
+                    .capacity(capacity)
+                    .foundedYear(foundedYear)
                     .build();
         } catch (Exception e) {
             log.error("Error fetching team details for ID {}: {}", teamId, e.getMessage());
