@@ -270,12 +270,93 @@ public String getFixturesByDate(String date) {
     }
 
     /**
+     * Internal class to represent the Team data from API response
+     */
+    public static class TeamData {
+        private int founded;
+        
+        public int getFounded() {
+            return founded;
+        }
+        
+        public void setFounded(int founded) {
+            this.founded = founded;
+        }
+    }
+
+    /**
+     * Internal class to represent the Venue data from API response
+     */
+    public static class Venue {
+        private String name;
+        private String image;
+        private String city;
+        private int capacity;
+        
+        public String getName() {
+            return name;
+        }
+        
+        public void setName(String name) {
+            this.name = name;
+        }
+        
+        public String getImage() {
+            return image;
+        }
+        
+        public void setImage(String image) {
+            this.image = image;
+        }
+        
+        public String getCity() {
+            return city;
+        }
+        
+        public void setCity(String city) {
+            this.city = city;
+        }
+        
+        public int getCapacity() {
+            return capacity;
+        }
+        
+        public void setCapacity(int capacity) {
+            this.capacity = capacity;
+        }
+    }
+
+    /**
+     * Internal class to represent the API response structure
+     */
+    public static class TeamResponse {
+        private TeamData team;
+        private Venue venue;
+        
+        public TeamData getTeam() {
+            return team;
+        }
+        
+        public void setTeam(TeamData team) {
+            this.team = team;
+        }
+        
+        public Venue getVenue() {
+            return venue;
+        }
+        
+        public void setVenue(Venue venue) {
+            this.venue = venue;
+        }
+    }
+
+    /**
      * Fetches team information including team and venue details from the Football API.
      * 
      * @param teamId The team ID
-     * @return JSON response string containing team and venue information, or null if API call fails
+     * @return TeamResponse containing team and venue information, or null if API call fails
      */
-    public String getTeamInfo(Long teamId) {
+    public TeamResponse getTeamInfo(Long teamId) {
         try {
             String url = "https://v3.football.api-sports.io/teams?id=" + teamId;
 
@@ -296,8 +377,37 @@ public String getFixturesByDate(String date) {
                 return null;
             }
 
+            // Parse JSON response
+            JsonNode root = objectMapper.readTree(response.getBody());
+            JsonNode responseArray = root.path("response");
+            
+            if (!responseArray.isArray() || responseArray.size() == 0) {
+                log.warn("No team data in response for team ID: {}", teamId);
+                return null;
+            }
+
+            // Extract the first team response
+            JsonNode teamResponseNode = responseArray.get(0);
+            
+            TeamResponse teamResponse = new TeamResponse();
+            
+            // Parse team data
+            JsonNode teamNode = teamResponseNode.path("team");
+            TeamData teamData = new TeamData();
+            teamData.setFounded(teamNode.path("founded").asInt(0));
+            teamResponse.setTeam(teamData);
+            
+            // Parse venue data
+            JsonNode venueNode = teamResponseNode.path("venue");
+            Venue venue = new Venue();
+            venue.setName(venueNode.path("name").asText(""));
+            venue.setImage(venueNode.path("image").asText(""));
+            venue.setCity(venueNode.path("city").asText(""));
+            venue.setCapacity(venueNode.path("capacity").asInt(0));
+            teamResponse.setVenue(venue);
+
             log.debug("Fetched team info for team ID: {}", teamId);
-            return response.getBody();
+            return teamResponse;
         } catch (Exception e) {
             log.error("Error fetching team info for team ID {}: {}", teamId, e.getMessage());
             return null;

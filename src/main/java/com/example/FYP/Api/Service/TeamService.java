@@ -246,45 +246,30 @@ public class TeamService {
     public TeamDetailsDTO getTeamDetails(Long teamId) {
         try {
             // Fetch team info from FootballService
-            String jsonResponse = footBallService.getTeamInfo(teamId);
+            FootBallService.TeamResponse teamResponse = footBallService.getTeamInfo(teamId);
             
-            if (jsonResponse == null || jsonResponse.isEmpty()) {
+            if (teamResponse == null) {
                 log.warn("No team info response for team ID: {}", teamId);
                 throw new EntityNotFoundException("Team not found with ID: " + teamId);
             }
 
-            JsonNode root = objectMapper.readTree(jsonResponse);
-            JsonNode response = root.path("response");
-            
-            if (!response.isArray() || response.size() == 0) {
-                throw new EntityNotFoundException("Team not found with ID: " + teamId);
+            FootBallService.TeamData teamData = teamResponse.getTeam();
+            FootBallService.Venue venue = teamResponse.getVenue();
+
+            if (teamData == null || venue == null) {
+                throw new EntityNotFoundException("Team data incomplete for ID: " + teamId);
             }
 
-            // Extract team and venue data
-            JsonNode teamData = response.get(0).path("team");
-            JsonNode venue = response.get(0).path("venue");
-
-            // Extract venue capacity - handle null/0 values
-            Integer capacity = null;
-            int capacityValue = venue.path("capacity").asInt(0);
-            if (capacityValue > 0) {
-                capacity = capacityValue;
-            }
-
-            // Extract founded year - handle null/0 values
-            Integer foundedYear = null;
-            int foundedValue = teamData.path("founded").asInt(0);
-            if (foundedValue > 0) {
-                foundedYear = foundedValue;
-            }
-
+            // Map the external data to TeamDetailsDTO
             return TeamDetailsDTO.builder()
-                    .stadiumName(venue.path("name").asText(""))
-                    .stadiumImage(venue.path("image").asText(""))
-                    .city(venue.path("city").asText(""))
-                    .capacity(capacity)
-                    .foundedYear(foundedYear)
+                    .stadiumName(venue.getName() != null ? venue.getName() : "")
+                    .stadiumImage(venue.getImage() != null ? venue.getImage() : "")
+                    .city(venue.getCity() != null ? venue.getCity() : "")
+                    .capacity(venue.getCapacity())
+                    .foundedYear(teamData.getFounded())
                     .build();
+        } catch (EntityNotFoundException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error fetching team details for ID {}: {}", teamId, e.getMessage());
             throw new EntityNotFoundException("Failed to fetch team details: " + e.getMessage());

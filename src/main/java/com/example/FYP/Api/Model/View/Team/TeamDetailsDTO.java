@@ -13,7 +13,7 @@ public class TeamDetailsDTO {
     private String stadiumName;
     private String stadiumImage;
     private String city;
-    private Integer capacity;
-    private Integer foundedYear;
+    private int capacity;
+    private int foundedYear;
 }
 
