@@ -13,7 +13,16 @@ services:
       - ./src/main/resources/application.properties:/app/config/application.properties
       - ./src/main/resources/client_secret_773653723597-i35sq1vmqe5kqveg7r9851gg7psmo83g.apps.googleusercontent.com.json:/app/config/client_secret_773653723597-i35sq1vmqe5kqveg7r9851gg7psmo83g.apps.googleusercontent.com.json
     environment:
+      # Keep your config location
       SPRING_CONFIG_LOCATION: "file:/app/config/application.properties"
+      
+      # --- CRITICAL FIX START ---
+      # Force the app to look for the container named 'mysql-db' instead of 'localhost'
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql-db:3306/jwt_auth_db?allowPublicKeyRetrieval=true&useSSL=false&createDatabaseIfNotExist=true"
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      # --- CRITICAL FIX END ---
+      
     depends_on:
       - mysql
       - logstash
@@ -52,7 +61,7 @@ services:
     ports:
       - "5044:5044"
     volumes:
-      - ./logstash.conf:/usr/share/logstash/config/logstash.conf
+      - ./src/logstash.conf:/usr/share/logstash/config/logstash.conf # Ensure this path is correct based on where your file is
     depends_on:
       elasticsearch:
         condition: service_healthy
