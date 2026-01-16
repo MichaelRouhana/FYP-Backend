@@ -19,6 +19,12 @@ public class TeamController {
 
     private final TeamService teamService;
 
+    // Test endpoint to verify controller is registered
+    @GetMapping("/test")
+    public ResponseEntity<String> test() {
+        return ResponseEntity.ok("TeamController is working!");
+    }
+
     @Operation(summary = "Get team header information", description = "Returns basic team information including name, logo, country, stadium, coach, etc.")
     @GetMapping("/{teamId}/header")
     public ResponseEntity<TeamHeaderDTO> getHeader(@PathVariable Long teamId) {
