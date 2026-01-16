@@ -125,10 +125,13 @@ public String getFixturesByDate(String date) {
     }
 
     /**
-     * Fetches coach details for a specific team from the Football API.
+     * Fetches the current active head coach for a specific team from the Football API.
+     * 
+     * The API returns a history of coaches. This method finds the coach with an active
+     * career entry (where end is null) for the requested team.
      * 
      * @param teamId The team ID
-     * @return CoachDTO with coach information, or null if no coach found or API call fails
+     * @return CoachDTO with coach information, or null if no active coach found or API call fails
      */
     public CoachDTO getCoachByTeamId(Long teamId) {
         try {
@@ -160,18 +163,109 @@ public String getFixturesByDate(String date) {
                 return null;
             }
 
-            // Get the first coach (teams typically have one active coach)
-            JsonNode coachData = responseArray.get(0);
+            // Strategy 1: Find the coach with an active career entry (end is null)
+            JsonNode activeCoach = findActiveCoach(responseArray, teamId);
+            
+            if (activeCoach != null) {
+                log.debug("Found active coach for team ID: {}", teamId);
+                return mapToCoachDTO(activeCoach);
+            }
 
-            return CoachDTO.builder()
-                    .name(coachData.path("name").asText(""))
-                    .photoUrl(coachData.path("photo").asText(""))
-                    .nationality(coachData.path("nationality").asText(""))
-                    .build();
+            // Strategy 2: Fallback - Find the most recent coach by checking career start dates
+            JsonNode mostRecentCoach = findMostRecentCoach(responseArray, teamId);
+            
+            if (mostRecentCoach != null) {
+                log.debug("Found most recent coach (fallback) for team ID: {}", teamId);
+                return mapToCoachDTO(mostRecentCoach);
+            }
+
+            // Strategy 3: Last resort - Return the last coach in the list (often the newest)
+            JsonNode lastCoach = responseArray.get(responseArray.size() - 1);
+            log.debug("Using last coach in list (fallback) for team ID: {}", teamId);
+            return mapToCoachDTO(lastCoach);
 
         } catch (Exception e) {
             log.error("Error fetching coach for team ID {}: {}", teamId, e.getMessage());
             return null; // Return null on error, allowing fallback handling
         }
+    }
+
+    /**
+     * Finds the coach with an active career entry for the specified team.
+     * An active career entry has end = null, meaning the coach is currently working.
+     */
+    private JsonNode findActiveCoach(JsonNode coachesArray, Long teamId) {
+        for (JsonNode coach : coachesArray) {
+            JsonNode career = coach.path("career");
+            
+            if (!career.isArray()) {
+                continue;
+            }
+
+            // Check each career entry
+            for (JsonNode careerEntry : career) {
+                JsonNode team = careerEntry.path("team");
+                Long careerTeamId = team.path("id").asLong(0);
+                
+                // Check if this career entry is for the requested team
+                if (careerTeamId.equals(teamId)) {
+                    // Check if the career entry is active (end is null or empty)
+                    String endDate = careerEntry.path("end").asText(null);
+                    if (endDate == null || endDate.isEmpty() || "null".equalsIgnoreCase(endDate)) {
+                        return coach; // Found active coach
+                    }
+                }
+            }
+        }
+        return null; // No active coach found
+    }
+
+    /**
+     * Finds the most recent coach by checking career start dates.
+     * Returns the coach with the latest start date for the specified team.
+     */
+    private JsonNode findMostRecentCoach(JsonNode coachesArray, Long teamId) {
+        JsonNode mostRecentCoach = null;
+        String mostRecentStartDate = null;
+
+        for (JsonNode coach : coachesArray) {
+            JsonNode career = coach.path("career");
+            
+            if (!career.isArray()) {
+                continue;
+            }
+
+            // Check each career entry
+            for (JsonNode careerEntry : career) {
+                JsonNode team = careerEntry.path("team");
+                Long careerTeamId = team.path("id").asLong(0);
+                
+                // Check if this career entry is for the requested team
+                if (careerTeamId.equals(teamId)) {
+                    String startDate = careerEntry.path("start").asText(null);
+                    
+                    // If this is the first match or has a more recent start date
+                    if (startDate != null && !startDate.isEmpty() && !"null".equalsIgnoreCase(startDate)) {
+                        if (mostRecentStartDate == null || startDate.compareTo(mostRecentStartDate) > 0) {
+                            mostRecentStartDate = startDate;
+                            mostRecentCoach = coach;
+                        }
+                    }
+                }
+            }
+        }
+        
+        return mostRecentCoach;
+    }
+
+    /**
+     * Maps a JsonNode coach object to CoachDTO.
+     */
+    private CoachDTO mapToCoachDTO(JsonNode coachData) {
+        return CoachDTO.builder()
+                .name(coachData.path("name").asText(""))
+                .photoUrl(coachData.path("photo").asText(""))
+                .nationality(coachData.path("nationality").asText(""))
+                .build();
     }
 }
