@@ -1,6 +1,8 @@
 package com.example.FYP.Api.Service;
 
-
+import com.example.FYP.Api.Model.View.Team.CoachDTO;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpEntity;
@@ -21,6 +23,7 @@ public class FootBallService {
     private String apiKey = "7aa48d98c402dc071bb8405ebbb722ec";
 
     private final RestTemplate restTemplate = new RestTemplate();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public String getLiveFixtures() {
         System.out.println(apiKey);
@@ -119,5 +122,56 @@ public String getFixturesByDate(String date) {
 
         log.debug("Fetched fixture by ID: {}", fixtureId);
         return response.getBody();
+    }
+
+    /**
+     * Fetches coach details for a specific team from the Football API.
+     * 
+     * @param teamId The team ID
+     * @return CoachDTO with coach information, or null if no coach found or API call fails
+     */
+    public CoachDTO getCoachByTeamId(Long teamId) {
+        try {
+            String url = "https://v3.football.api-sports.io/coachs?team=" + teamId;
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.put("x-apisports-key", Collections.singletonList(apiKey));
+
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    entity,
+                    String.class
+            );
+
+            if (response.getBody() == null) {
+                log.warn("Empty response from coach API for team ID: {}", teamId);
+                return null;
+            }
+
+            JsonNode root = objectMapper.readTree(response.getBody());
+            JsonNode responseArray = root.path("response");
+
+            // Check if response is an array and has at least one element
+            if (!responseArray.isArray() || responseArray.size() == 0) {
+                log.debug("No coach found for team ID: {}", teamId);
+                return null;
+            }
+
+            // Get the first coach (teams typically have one active coach)
+            JsonNode coachData = responseArray.get(0);
+
+            return CoachDTO.builder()
+                    .name(coachData.path("name").asText(""))
+                    .photoUrl(coachData.path("photo").asText(""))
+                    .nationality(coachData.path("nationality").asText(""))
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error fetching coach for team ID {}: {}", teamId, e.getMessage());
+            return null; // Return null on error, allowing fallback handling
+        }
     }
 }

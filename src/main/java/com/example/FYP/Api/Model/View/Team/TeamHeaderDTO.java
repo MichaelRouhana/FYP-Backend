@@ -16,6 +16,7 @@ public class TeamHeaderDTO {
     private String country;
     private String stadiumName;
     private String coachName;
+    private String coachImageUrl;
     private Integer uefaRanking;
 }
 

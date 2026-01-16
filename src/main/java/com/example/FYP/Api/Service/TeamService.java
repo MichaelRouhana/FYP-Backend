@@ -53,13 +53,26 @@ public class TeamService {
             JsonNode venue = response.get(0).path("venue");
             JsonNode coach = response.get(0).path("coach");
 
+            // Fetch coach details from dedicated coach endpoint
+            CoachDTO coachDTO = footBallService.getCoachByTeamId(teamId);
+            
+            // Use coach from dedicated endpoint if available, otherwise fallback to team data
+            String coachName = coachDTO != null && coachDTO.getName() != null && !coachDTO.getName().isEmpty()
+                    ? coachDTO.getName()
+                    : coach.path("name").asText("");
+            
+            String coachImageUrl = coachDTO != null && coachDTO.getPhotoUrl() != null && !coachDTO.getPhotoUrl().isEmpty()
+                    ? coachDTO.getPhotoUrl()
+                    : null; // null means no image, frontend will show icon fallback
+
             return TeamHeaderDTO.builder()
                     .name(teamData.path("name").asText(""))
                     .logo(teamData.path("logo").asText(""))
                     .foundedYear(teamData.path("founded").asInt(0))
                     .country(teamData.path("country").asText(""))
                     .stadiumName(venue.path("name").asText(""))
-                    .coachName(coach.path("name").asText(""))
+                    .coachName(coachName)
+                    .coachImageUrl(coachImageUrl)
                     .uefaRanking(teamData.path("national").asBoolean(false) ? null : extractUefaRanking(teamData))
                     .build();
         } catch (Exception e) {
