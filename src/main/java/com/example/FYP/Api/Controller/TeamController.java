@@ -12,7 +12,7 @@ import java.util.List;
 
 @RestController
 // CRITICAL FIX: Must match the frontend's "/api/v1" prefix
-@RequestMapping("/api/v1/team")
+@RequestMapping("/team")
 @RequiredArgsConstructor
 public class TeamController {
 
