@@ -150,32 +150,114 @@ public class TeamService {
     }
 
     /**
-     * Get team statistics for a specific league
+     * Get team statistics - automatically determines league and season
      */
     public TeamStatsDTO getStatistics(Long teamId, Long leagueId) {
         try {
+            // If leagueId is provided, use it directly
+            if (leagueId != null && leagueId > 0) {
+                return getStatisticsForLeague(teamId, leagueId, 2024);
+            }
+            
+            // Otherwise, fetch team's leagues first to determine league and season
+            return getStatisticsAuto(teamId);
+        } catch (Exception e) {
+            log.error("Error fetching statistics for team ID {}: {}", teamId, e.getMessage());
+            return getDefaultStats();
+        }
+    }
+    
+    /**
+     * Automatically determine league and season, then fetch statistics
+     */
+    private TeamStatsDTO getStatisticsAuto(Long teamId) {
+        try {
+            // Step 1: Fetch team's current leagues
+            String leaguesResponse = fetchFromApi("leagues", 
+                    Map.of("team", teamId.toString(), "current", "true"));
+            JsonNode leaguesRoot = objectMapper.readTree(leaguesResponse);
+            JsonNode leaguesArray = leaguesRoot.path("response");
+            
+            if (!leaguesArray.isArray() || leaguesArray.size() == 0) {
+                log.warn("No current leagues found for team ID: {}", teamId);
+                return getDefaultStats();
+            }
+            
+            // Step 2: Find the best league (prioritize major leagues)
+            Long selectedLeagueId = null;
+            Integer selectedSeason = null;
+            
+            // Priority order: Premier League (39), La Liga (140), Serie A (135), Bundesliga (78), Ligue 1 (61)
+            int[] priorityLeagues = {39, 140, 135, 78, 61};
+            
+            // First, try to find a priority league
+            for (int priorityId : priorityLeagues) {
+                for (JsonNode league : leaguesArray) {
+                    JsonNode leagueData = league.path("league");
+                    if (leagueData.path("id").asInt(0) == priorityId) {
+                        selectedLeagueId = (long) priorityId;
+                        selectedSeason = leagueData.path("seasons").isArray() && leagueData.path("seasons").size() > 0
+                                ? leagueData.path("seasons").get(0).path("year").asInt(2024)
+                                : 2024;
+                        log.info("Found priority league {} for team {}, season {}", selectedLeagueId, teamId, selectedSeason);
+                        break;
+                    }
+                }
+                if (selectedLeagueId != null) break;
+            }
+            
+            // If no priority league found, use the first one
+            if (selectedLeagueId == null) {
+                JsonNode firstLeague = leaguesArray.get(0);
+                JsonNode leagueData = firstLeague.path("league");
+                selectedLeagueId = (long) leagueData.path("id").asInt(0);
+                selectedSeason = leagueData.path("seasons").isArray() && leagueData.path("seasons").size() > 0
+                        ? leagueData.path("seasons").get(0).path("year").asInt(2024)
+                        : 2024;
+                log.info("Using first available league {} for team {}, season {}", selectedLeagueId, teamId, selectedSeason);
+            }
+            
+            if (selectedLeagueId == null || selectedLeagueId == 0) {
+                log.warn("Could not determine league for team ID: {}", teamId);
+                return getDefaultStats();
+            }
+            
+            // Step 3: Fetch statistics using the determined league and season
+            return getStatisticsForLeague(teamId, selectedLeagueId, selectedSeason);
+            
+        } catch (Exception e) {
+            log.error("Error in auto-fetching statistics for team ID {}: {}", teamId, e.getMessage());
+            return getDefaultStats();
+        }
+    }
+    
+    /**
+     * Get team statistics for a specific league and season
+     */
+    private TeamStatsDTO getStatisticsForLeague(Long teamId, Long leagueId, Integer season) {
+        try {
             // Fetch team statistics from external API
             String jsonResponse = fetchFromApi("teams/statistics", 
-                    Map.of("team", teamId.toString(), "league", leagueId.toString(), "season", "2024"));
+                    Map.of("team", teamId.toString(), "league", leagueId.toString(), "season", season.toString()));
             JsonNode root = objectMapper.readTree(jsonResponse);
             JsonNode response = root.path("response");
             
             if (!response.isArray() || response.size() == 0) {
-                // Return default stats if API doesn't have data
+                log.warn("No statistics response for team {} in league {} season {}", teamId, leagueId, season);
                 return getDefaultStats();
             }
 
             // API-Sports returns: response[0].league.statistics (aggregated statistics object)
             JsonNode statistics = response.get(0).path("league").path("statistics");
             if (statistics.isMissingNode() || !statistics.isObject()) {
-                // Return default stats if structure doesn't match
+                log.warn("Statistics object not found in response for team {} in league {} season {}", teamId, leagueId, season);
                 return getDefaultStats();
             }
 
             return parseStatistics(statistics);
         } catch (Exception e) {
-            log.error("Error fetching statistics for team ID {} in league {}: {}", teamId, leagueId, e.getMessage());
-            // Return default stats on error
+            log.error("Error fetching statistics for team ID {} in league {} season {}: {}", 
+                    teamId, leagueId, season, e.getMessage());
             return getDefaultStats();
         }
     }
@@ -188,15 +270,31 @@ public class TeamService {
         Integer draws = safeInt(fixtures.path("draws").path("total"));
         Integer losses = safeInt(fixtures.path("loses").path("total"));
         
-        // Goals
+        // Goals - API structure: goals.for.total (sometimes nested as goals.for.total.total)
         JsonNode goals = stats.path("goals");
         JsonNode goalsFor = goals.path("for");
         JsonNode goalsAgainst = goals.path("against");
         
+        // Try both paths: goals.for.total and goals.for.total.total
         Integer totalGoalsFor = safeInt(goalsFor.path("total"));
-        String goalsForAverage = safeString(goalsFor.path("average").path("total"));
+        if (totalGoalsFor == null && goalsFor.path("total").isObject()) {
+            totalGoalsFor = safeInt(goalsFor.path("total").path("total"));
+        }
+        
+        String goalsForAverage = safeString(goalsFor.path("average"));
+        if (goalsForAverage == null && goalsFor.path("average").isObject()) {
+            goalsForAverage = safeString(goalsFor.path("average").path("total"));
+        }
+        
         Integer totalGoalsAgainst = safeInt(goalsAgainst.path("total"));
-        String goalsAgainstAverage = safeString(goalsAgainst.path("average").path("total"));
+        if (totalGoalsAgainst == null && goalsAgainst.path("total").isObject()) {
+            totalGoalsAgainst = safeInt(goalsAgainst.path("total").path("total"));
+        }
+        
+        String goalsAgainstAverage = safeString(goalsAgainst.path("average"));
+        if (goalsAgainstAverage == null && goalsAgainst.path("average").isObject()) {
+            goalsAgainstAverage = safeString(goalsAgainst.path("average").path("total"));
+        }
         
         // Goal difference
         Integer goalDifference = null;
@@ -204,7 +302,7 @@ public class TeamService {
             goalDifference = totalGoalsFor - totalGoalsAgainst;
         }
         
-        // Clean sheets
+        // Clean sheets - API structure: clean_sheet.total
         Integer cleanSheets = safeInt(stats.path("clean_sheet").path("total"));
         
         // Attacking
