@@ -152,244 +152,159 @@ public class TeamService {
     /**
      * Get team statistics - automatically determines league and season if not provided
      */
-    public TeamStatsDTO getStatistics(Long teamId, Long leagueId, Integer season) {
+    public TeamStatsDTO getTeamStats(Long teamId, Long leagueId, Long season) {
         try {
-            // If both leagueId and season are provided, use them directly
-            if (leagueId != null && leagueId > 0 && season != null && season > 0) {
-                return getStatisticsForLeague(teamId, leagueId, season);
-            }
-            
-            // If only leagueId is provided, use default season (current year)
-            if (leagueId != null && leagueId > 0) {
-                int defaultSeason = season != null && season > 0 ? season : 2024;
-                return getStatisticsForLeague(teamId, leagueId, defaultSeason);
-            }
-            
-            // Otherwise, auto-detect league and season
-            return getStatisticsAuto(teamId, season);
-        } catch (Exception e) {
-            log.error("Error fetching statistics for team ID {}: {}", teamId, e.getMessage());
-            return getDefaultStats();
-        }
-    }
-    
-    /**
-     * Automatically determine league and season, then fetch statistics
-     */
-    private TeamStatsDTO getStatisticsAuto(Long teamId, Integer providedSeason) {
-        try {
-            // Step 1: Fetch team's current leagues
-            String leaguesResponse = fetchFromApi("leagues", 
-                    Map.of("team", teamId.toString(), "current", "true"));
-            JsonNode leaguesRoot = objectMapper.readTree(leaguesResponse);
-            JsonNode leaguesArray = leaguesRoot.path("response");
-            
-            if (!leaguesArray.isArray() || leaguesArray.size() == 0) {
-                log.warn("No current leagues found for team ID: {}", teamId);
-                return getDefaultStats();
-            }
-            
-            // Step 2: Find the best league (prioritize major leagues)
-            Long selectedLeagueId = null;
-            Integer selectedSeason = null;
-            
-            // Priority order: Premier League (39), La Liga (140), Serie A (135), Bundesliga (78), Ligue 1 (61)
-            int[] priorityLeagues = {39, 140, 135, 78, 61};
-            
-            // First, try to find a priority league
-            for (int priorityId : priorityLeagues) {
-                for (JsonNode league : leaguesArray) {
-                    JsonNode leagueData = league.path("league");
-                    if (leagueData.path("id").asInt(0) == priorityId) {
-                        selectedLeagueId = (long) priorityId;
-                        // Use provided season if available, otherwise extract from response
-                        JsonNode seasons = leagueData.path("seasons");
-                        if (providedSeason != null && providedSeason > 0) {
-                            selectedSeason = providedSeason;
-                        } else if (seasons.isArray() && seasons.size() > 0) {
-                            // Get the current/active season (usually the last one in the array)
-                            JsonNode lastSeason = seasons.get(seasons.size() - 1);
-                            selectedSeason = lastSeason.path("year").asInt(2024);
-                        } else {
-                            selectedSeason = 2024;
-                        }
-                        log.info("Found priority league {} for team {}, season {}", selectedLeagueId, teamId, selectedSeason);
-                        break;
-                    }
-                }
-                if (selectedLeagueId != null) break;
-            }
-            
-            // If no priority league found, use the first one
-            if (selectedLeagueId == null) {
-                JsonNode firstLeague = leaguesArray.get(0);
-                JsonNode leagueData = firstLeague.path("league");
-                selectedLeagueId = (long) leagueData.path("id").asInt(0);
+            // 1. AUTO-DISCOVERY: If params are missing, find the active major league
+            if (leagueId == null || season == null) {
+                String leaguesJson = fetchFromApi("leagues", Map.of("team", teamId.toString(), "current", "true"));
+                JsonNode leaguesResponse = objectMapper.readTree(leaguesJson).path("response");
                 
-                // Use provided season if available, otherwise extract from response
-                JsonNode seasons = leagueData.path("seasons");
-                if (providedSeason != null && providedSeason > 0) {
-                    selectedSeason = providedSeason;
-                } else if (seasons.isArray() && seasons.size() > 0) {
-                    JsonNode lastSeason = seasons.get(seasons.size() - 1);
-                    selectedSeason = lastSeason.path("year").asInt(2024);
+                if (leaguesResponse.isArray() && leaguesResponse.size() > 0) {
+                    JsonNode selectedLeague = leaguesResponse.get(0); // Default to first
+                    
+                    // Prioritize Major Leagues (PL, La Liga, Serie A, Bundesliga, Ligue 1)
+                    for (JsonNode item : leaguesResponse) {
+                        int id = item.path("league").path("id").asInt(0);
+                        if (id == 39 || id == 140 || id == 135 || id == 78 || id == 61) {
+                            selectedLeague = item;
+                            break;
+                        }
+                    }
+                    
+                    leagueId = selectedLeague.path("league").path("id").asLong();
+                    JsonNode seasons = selectedLeague.path("league").path("seasons");
+                    if (seasons.isArray() && seasons.size() > 0) {
+                        season = seasons.get(0).path("year").asLong();
+                    } else {
+                        season = 2024L;
+                    }
+                    log.info("Auto-Selected League: {} Season: {}", leagueId, season);
                 } else {
-                    selectedSeason = 2024;
+                    return new TeamStatsDTO(); // Return empty if no leagues found
                 }
-                log.info("Using first available league {} for team {}, season {}", selectedLeagueId, teamId, selectedSeason);
             }
+
+            // 2. FETCH STATS
+            String statsJson = fetchFromApi("teams/statistics", Map.of(
+                "team", teamId.toString(), 
+                "league", leagueId.toString(), 
+                "season", season.toString()
+            ));
             
-            if (selectedLeagueId == null || selectedLeagueId == 0) {
-                log.warn("Could not determine league for team ID: {}", teamId);
-                return getDefaultStats();
-            }
-            
-            // Step 3: Fetch statistics using the determined league and season
-            return getStatisticsForLeague(teamId, selectedLeagueId, selectedSeason);
-            
-        } catch (Exception e) {
-            log.error("Error in auto-fetching statistics for team ID {}: {}", teamId, e.getMessage());
-            return getDefaultStats();
-        }
-    }
-    
-    /**
-     * Get team statistics for a specific league and season
-     */
-    private TeamStatsDTO getStatisticsForLeague(Long teamId, Long leagueId, Integer season) {
-        try {
-            // Fetch team statistics from external API
-            String jsonResponse = fetchFromApi("teams/statistics", 
-                    Map.of("team", teamId.toString(), "league", leagueId.toString(), "season", season.toString()));
-            JsonNode root = objectMapper.readTree(jsonResponse);
+            JsonNode root = objectMapper.readTree(statsJson);
             JsonNode response = root.path("response");
-            
+
             if (!response.isArray() || response.size() == 0) {
                 log.warn("No statistics response for team {} in league {} season {}", teamId, leagueId, season);
-                return getDefaultStats();
+                return new TeamStatsDTO();
             }
 
-            // API-Sports returns: response[0].league.statistics (aggregated statistics object)
-            JsonNode statistics = response.get(0).path("league").path("statistics");
-            if (statistics.isMissingNode() || !statistics.isObject()) {
+            // API-Football returns: response[0].league.statistics
+            JsonNode stats = response.get(0).path("league").path("statistics");
+            if (stats.isMissingNode() || !stats.isObject()) {
                 log.warn("Statistics object not found in response for team {} in league {} season {}", teamId, leagueId, season);
-                return getDefaultStats();
+                return new TeamStatsDTO();
             }
 
-            return parseStatistics(statistics);
-        } catch (Exception e) {
-            log.error("Error fetching statistics for team ID {} in league {} season {}: {}", 
-                    teamId, leagueId, season, e.getMessage());
-            return getDefaultStats();
-        }
-    }
+            // 3. MANUAL MAPPING (Prevents 0s)
+            JsonNode fixtures = stats.path("fixtures");
+            JsonNode goals = stats.path("goals");
+            
+            TeamStatsDTO dto = new TeamStatsDTO();
+            
+            // Summary
+            dto.setMatchesPlayed(fixtures.path("played").path("total").asInt(0));
+            dto.setWins(fixtures.path("wins").path("total").asInt(0));
+            dto.setDraws(fixtures.path("draws").path("total").asInt(0));
+            dto.setLosses(fixtures.path("loses").path("total").asInt(0));
+            dto.setCleanSheets(stats.path("clean_sheet").path("total").asInt(0));
+            
+            // Goals - handle nested structure
+            int scored = 0;
+            JsonNode goalsForTotal = goals.path("for").path("total");
+            if (goalsForTotal.isObject()) {
+                scored = goalsForTotal.path("total").asInt(0);
+            } else {
+                scored = goalsForTotal.asInt(0);
+            }
+            
+            int conceded = 0;
+            JsonNode goalsAgainstTotal = goals.path("against").path("total");
+            if (goalsAgainstTotal.isObject()) {
+                conceded = goalsAgainstTotal.path("total").asInt(0);
+            } else {
+                conceded = goalsAgainstTotal.asInt(0);
+            }
+            
+            dto.setGoalDifference(scored - conceded);
 
-    private TeamStatsDTO parseStatistics(JsonNode stats) {
-        // Summary fields - fixtures.played.total
-        JsonNode fixtures = stats.path("fixtures");
-        Integer matchesPlayed = safeInt(fixtures.path("played").path("total"));
-        Integer wins = safeInt(fixtures.path("wins").path("total"));
-        Integer draws = safeInt(fixtures.path("draws").path("total"));
-        Integer losses = safeInt(fixtures.path("loses").path("total"));
-        
-        // Goals - API structure: goals.for.total (sometimes nested as goals.for.total.total)
-        JsonNode goals = stats.path("goals");
-        JsonNode goalsFor = goals.path("for");
-        JsonNode goalsAgainst = goals.path("against");
-        
-        // Try both paths: goals.for.total and goals.for.total.total
-        Integer goalsScored = safeInt(goalsFor.path("total"));
-        if (goalsScored == null && goalsFor.path("total").isObject()) {
-            goalsScored = safeInt(goalsFor.path("total").path("total"));
+            // Attacking
+            dto.setGoalsScored(scored);
+            
+            JsonNode goalsForAverage = goals.path("for").path("average");
+            String goalsPerMatchStr = "0.0";
+            if (goalsForAverage.isObject()) {
+                goalsPerMatchStr = goalsForAverage.path("total").asText("0.0");
+            } else {
+                goalsPerMatchStr = goalsForAverage.asText("0.0");
+            }
+            dto.setGoalsPerMatch(goalsPerMatchStr);
+            
+            dto.setShots(stats.path("shots").path("total").asInt(0));
+            dto.setShotsOnTarget(stats.path("shots").path("on").path("total").asInt(0));
+            dto.setPenaltiesScored(stats.path("penalty").path("scored").path("total").asInt(0));
+
+            // Passing
+            dto.setPasses(stats.path("passes").path("total").asInt(0));
+            dto.setPassesAccurate(stats.path("passes").path("accurate").asInt(0));
+            dto.setPassAccuracy(stats.path("passes").path("percentage").asText("0%"));
+
+            // Defending
+            dto.setGoalsConceded(conceded);
+            
+            JsonNode goalsAgainstAverage = goals.path("against").path("average");
+            String goalsConcededPerMatchStr = "0.0";
+            if (goalsAgainstAverage.isObject()) {
+                goalsConcededPerMatchStr = goalsAgainstAverage.path("total").asText("0.0");
+            } else {
+                goalsConcededPerMatchStr = goalsAgainstAverage.asText("0.0");
+            }
+            dto.setGoalsConcededPerMatch(goalsConcededPerMatchStr);
+            
+            dto.setTackles(stats.path("tackles").path("total").asInt(0));
+            dto.setInterceptions(stats.path("tackles").path("interceptions").asInt(0));
+            dto.setSaves(stats.path("goalkeeper").path("saves").asInt(0));
+            
+            // Cards (Summing up the map)
+            int yellow = 0;
+            JsonNode yellowMap = stats.path("cards").path("yellow");
+            if (yellowMap.isObject()) {
+                Iterator<String> fieldNames = yellowMap.fieldNames();
+                while(fieldNames.hasNext()) {
+                    yellow += yellowMap.path(fieldNames.next()).path("total").asInt(0);
+                }
+            }
+            dto.setYellowCards(yellow);
+            
+            int red = 0;
+            JsonNode redMap = stats.path("cards").path("red");
+            if (redMap.isObject()) {
+                Iterator<String> fieldNames = redMap.fieldNames();
+                while(fieldNames.hasNext()) {
+                    red += redMap.path(fieldNames.next()).path("total").asInt(0);
+                }
+            }
+            dto.setRedCards(red);
+            
+            // Fouls
+            dto.setFouls(stats.path("fouls").path("committed").path("total").asInt(0));
+
+            return dto;
+
+        } catch (Exception e) {
+            log.error("Error fetching team stats for team ID {}: {}", teamId, e.getMessage(), e);
+            return new TeamStatsDTO();
         }
-        
-        // Goals per match - goals.for.average.total or goals.for.average
-        String goalsPerMatch = null;
-        JsonNode goalsForAverage = goalsFor.path("average");
-        if (goalsForAverage.isObject()) {
-            goalsPerMatch = safeString(goalsForAverage.path("total"));
-        } else {
-            goalsPerMatch = safeString(goalsForAverage);
-        }
-        
-        Integer goalsConceded = safeInt(goalsAgainst.path("total"));
-        if (goalsConceded == null && goalsAgainst.path("total").isObject()) {
-            goalsConceded = safeInt(goalsAgainst.path("total").path("total"));
-        }
-        
-        // Goals conceded per match - goals.against.average.total or goals.against.average
-        String goalsConcededPerMatch = null;
-        JsonNode goalsAgainstAverage = goalsAgainst.path("average");
-        if (goalsAgainstAverage.isObject()) {
-            goalsConcededPerMatch = safeString(goalsAgainstAverage.path("total"));
-        } else {
-            goalsConcededPerMatch = safeString(goalsAgainstAverage);
-        }
-        
-        // Goal difference - calculate from goals scored and conceded
-        Integer goalDifference = null;
-        if (goalsScored != null && goalsConceded != null) {
-            goalDifference = goalsScored - goalsConceded;
-        }
-        
-        // Clean sheets - API structure: clean_sheet.total
-        Integer cleanSheets = safeInt(stats.path("clean_sheet").path("total"));
-        
-        // Attacking - shots.total, shots.on.total, penalty.scored.total
-        JsonNode shots = stats.path("shots");
-        Integer shotsTotal = safeInt(shots.path("total"));
-        Integer shotsOnTarget = safeInt(shots.path("on").path("total"));
-        
-        JsonNode penalty = stats.path("penalty");
-        Integer penaltiesScored = safeInt(penalty.path("scored").path("total"));
-        
-        // Passing - passes.total, passes.accurate, passes.percentage
-        JsonNode passes = stats.path("passes");
-        Integer passesTotal = safeInt(passes.path("total"));
-        Integer passesAccurate = safeInt(passes.path("accurate"));
-        String passAccuracy = safeString(passes.path("percentage"));
-        
-        // Defending - tackles.total, tackles.interceptions, goalkeeper.saves
-        JsonNode tackles = stats.path("tackles");
-        Integer tacklesTotal = safeInt(tackles.path("total"));
-        Integer interceptions = safeInt(tackles.path("interceptions"));
-        
-        JsonNode goalkeeper = stats.path("goalkeeper");
-        Integer saves = safeInt(goalkeeper.path("saves"));
-        
-        // Cards - aggregate from cards map structure (time buckets like "0-15", "16-30", etc.)
-        JsonNode cards = stats.path("cards");
-        Integer yellowCards = aggregateCardCount(cards.path("yellow"));
-        Integer redCards = aggregateCardCount(cards.path("red"));
-        
-        // Fouls - fouls.committed.total
-        JsonNode foulsNode = stats.path("fouls");
-        Integer fouls = safeInt(foulsNode.path("committed").path("total"));
-        
-        return TeamStatsDTO.builder()
-                .matchesPlayed(matchesPlayed != null ? matchesPlayed : 0)
-                .wins(wins != null ? wins : 0)
-                .draws(draws != null ? draws : 0)
-                .losses(losses != null ? losses : 0)
-                .goalDifference(goalDifference != null ? goalDifference : 0)
-                .cleanSheets(cleanSheets != null ? cleanSheets : 0)
-                .goalsScored(goalsScored != null ? goalsScored : 0)
-                .goalsPerMatch(goalsPerMatch != null ? goalsPerMatch : "0.00")
-                .shots(shotsTotal != null ? shotsTotal : 0)
-                .shotsOnTarget(shotsOnTarget != null ? shotsOnTarget : 0)
-                .penaltiesScored(penaltiesScored != null ? penaltiesScored : 0)
-                .passes(passesTotal != null ? passesTotal : 0)
-                .passesAccurate(passesAccurate != null ? passesAccurate : 0)
-                .passAccuracy(passAccuracy != null ? passAccuracy : "0%")
-                .goalsConceded(goalsConceded != null ? goalsConceded : 0)
-                .goalsConcededPerMatch(goalsConcededPerMatch != null ? goalsConcededPerMatch : "0.00")
-                .tackles(tacklesTotal != null ? tacklesTotal : 0)
-                .interceptions(interceptions != null ? interceptions : 0)
-                .saves(saves != null ? saves : 0)
-                .yellowCards(yellowCards != null ? yellowCards : 0)
-                .redCards(redCards != null ? redCards : 0)
-                .fouls(fouls != null ? fouls : 0)
-                .build();
     }
     
     private Integer safeInt(JsonNode node) {
