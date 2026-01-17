@@ -150,17 +150,23 @@ public class TeamService {
     }
 
     /**
-     * Get team statistics - automatically determines league and season
+     * Get team statistics - automatically determines league and season if not provided
      */
-    public TeamStatsDTO getStatistics(Long teamId, Long leagueId) {
+    public TeamStatsDTO getStatistics(Long teamId, Long leagueId, Integer season) {
         try {
-            // If leagueId is provided, use it directly
-            if (leagueId != null && leagueId > 0) {
-                return getStatisticsForLeague(teamId, leagueId, 2024);
+            // If both leagueId and season are provided, use them directly
+            if (leagueId != null && leagueId > 0 && season != null && season > 0) {
+                return getStatisticsForLeague(teamId, leagueId, season);
             }
             
-            // Otherwise, fetch team's leagues first to determine league and season
-            return getStatisticsAuto(teamId);
+            // If only leagueId is provided, use default season (current year)
+            if (leagueId != null && leagueId > 0) {
+                int defaultSeason = season != null && season > 0 ? season : 2024;
+                return getStatisticsForLeague(teamId, leagueId, defaultSeason);
+            }
+            
+            // Otherwise, auto-detect league and season
+            return getStatisticsAuto(teamId, season);
         } catch (Exception e) {
             log.error("Error fetching statistics for team ID {}: {}", teamId, e.getMessage());
             return getDefaultStats();
@@ -170,7 +176,7 @@ public class TeamService {
     /**
      * Automatically determine league and season, then fetch statistics
      */
-    private TeamStatsDTO getStatisticsAuto(Long teamId) {
+    private TeamStatsDTO getStatisticsAuto(Long teamId, Integer providedSeason) {
         try {
             // Step 1: Fetch team's current leagues
             String leaguesResponse = fetchFromApi("leagues", 
@@ -196,9 +202,17 @@ public class TeamService {
                     JsonNode leagueData = league.path("league");
                     if (leagueData.path("id").asInt(0) == priorityId) {
                         selectedLeagueId = (long) priorityId;
-                        selectedSeason = leagueData.path("seasons").isArray() && leagueData.path("seasons").size() > 0
-                                ? leagueData.path("seasons").get(0).path("year").asInt(2024)
-                                : 2024;
+                        // Use provided season if available, otherwise extract from response
+                        JsonNode seasons = leagueData.path("seasons");
+                        if (providedSeason != null && providedSeason > 0) {
+                            selectedSeason = providedSeason;
+                        } else if (seasons.isArray() && seasons.size() > 0) {
+                            // Get the current/active season (usually the last one in the array)
+                            JsonNode lastSeason = seasons.get(seasons.size() - 1);
+                            selectedSeason = lastSeason.path("year").asInt(2024);
+                        } else {
+                            selectedSeason = 2024;
+                        }
                         log.info("Found priority league {} for team {}, season {}", selectedLeagueId, teamId, selectedSeason);
                         break;
                     }
@@ -211,9 +225,17 @@ public class TeamService {
                 JsonNode firstLeague = leaguesArray.get(0);
                 JsonNode leagueData = firstLeague.path("league");
                 selectedLeagueId = (long) leagueData.path("id").asInt(0);
-                selectedSeason = leagueData.path("seasons").isArray() && leagueData.path("seasons").size() > 0
-                        ? leagueData.path("seasons").get(0).path("year").asInt(2024)
-                        : 2024;
+                
+                // Use provided season if available, otherwise extract from response
+                JsonNode seasons = leagueData.path("seasons");
+                if (providedSeason != null && providedSeason > 0) {
+                    selectedSeason = providedSeason;
+                } else if (seasons.isArray() && seasons.size() > 0) {
+                    JsonNode lastSeason = seasons.get(seasons.size() - 1);
+                    selectedSeason = lastSeason.path("year").asInt(2024);
+                } else {
+                    selectedSeason = 2024;
+                }
                 log.info("Using first available league {} for team {}, season {}", selectedLeagueId, teamId, selectedSeason);
             }
             

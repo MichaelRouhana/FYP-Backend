@@ -43,13 +43,14 @@ public class TeamController {
         return ResponseEntity.ok(squad);
     }
 
-    @Operation(summary = "Get team statistics", description = "Returns team statistics. If leagueId is not provided, automatically determines the team's current league and season.")
+    @Operation(summary = "Get team statistics", description = "Returns team statistics. If leagueId or season is not provided, automatically determines the team's current league and season.")
     @GetMapping("/{id}/statistics")
     public ResponseEntity<TeamStatsDTO> getStatistics(
             @PathVariable Long id,
-            @RequestParam(required = false) Long leagueId
+            @RequestParam(required = false) Long leagueId,
+            @RequestParam(required = false) Integer season
     ) {
-        TeamStatsDTO stats = teamService.getStatistics(id, leagueId);
+        TeamStatsDTO stats = teamService.getStatistics(id, leagueId, season);
         return ResponseEntity.ok(stats);
     }
 
