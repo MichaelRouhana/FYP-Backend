@@ -150,94 +150,198 @@ public class TeamService {
     }
 
     /**
-     * Get team statistics for a specific league
+     * Get team statistics for a specific league and season
+     * @param teamId The team ID
+     * @param leagueId The league ID
+     * @param season The season year (e.g., 2024)
+     * @return TeamStatsDTO with categorized statistics
      */
-    public TeamStatsDTO getStatistics(Long teamId, Long leagueId) {
+    public TeamStatsDTO getTeamStatistics(Long teamId, Long leagueId, Integer season) {
         try {
+            // Use current season if not provided
+            if (season == null) {
+                season = java.time.Year.now().getValue();
+            }
+            
             // Fetch team statistics from external API
             String jsonResponse = fetchFromApi("teams/statistics", 
-                    Map.of("team", teamId.toString(), "league", leagueId.toString(), "season", "2024"));
+                    Map.of("team", teamId.toString(), "league", leagueId.toString(), "season", season.toString()));
             JsonNode root = objectMapper.readTree(jsonResponse);
             JsonNode response = root.path("response");
             
             if (!response.isArray() || response.size() == 0) {
-                // Return default stats if API doesn't have data
-                return TeamStatsDTO.builder()
-                        .matchesPlayed(0)
-                        .goalsScored(0)
-                        .goalsPerGame(0.0)
-                        .cleanSheets(0)
-                        .yellowCards(0)
-                        .redCards(0)
-                        .build();
+                return buildDefaultStats();
             }
 
-            // API-Sports returns statistics in a specific format
-            JsonNode leagueStats = response.get(0).path("league").path("statistics");
-            if (leagueStats.isMissingNode() || !leagueStats.isArray() || leagueStats.size() == 0) {
-                // Try alternative path: response[0].statistics
-                JsonNode altStats = response.get(0).path("statistics");
-                if (altStats.isMissingNode() || !altStats.isArray() || altStats.size() == 0) {
-                    return TeamStatsDTO.builder()
-                            .matchesPlayed(0)
-                            .goalsScored(0)
-                            .goalsPerGame(0.0)
-                            .cleanSheets(0)
-                            .yellowCards(0)
-                            .redCards(0)
-                            .build();
-                }
-                return parseStatisticsFromArray(altStats);
-            }
-
-            return parseStatisticsFromArray(leagueStats);
-        } catch (Exception e) {
-            log.error("Error fetching statistics for team ID {} in league {}: {}", teamId, leagueId, e.getMessage());
-            // Return default stats on error
-            return TeamStatsDTO.builder()
-                    .matchesPlayed(0)
-                    .goalsScored(0)
-                    .goalsPerGame(0.0)
-                    .cleanSheets(0)
-                    .yellowCards(0)
-                    .redCards(0)
+            // API-Football returns: response[0] contains the statistics object
+            JsonNode statsData = response.get(0);
+            
+            // Build Summary from fixtures
+            JsonNode fixtures = statsData.path("fixtures");
+            TeamStatsDTO.Summary summary = TeamStatsDTO.Summary.builder()
+                    .played(safeInt(fixtures.path("played")))
+                    .wins(safeInt(fixtures.path("wins")))
+                    .draws(safeInt(fixtures.path("draws")))
+                    .loses(safeInt(fixtures.path("loses")))
+                    .form(safeString(fixtures.path("form")))
                     .build();
+
+            // Build Attacking from goals, penalty, and shots
+            JsonNode goals = statsData.path("goals");
+            JsonNode penalty = statsData.path("penalty");
+            JsonNode shots = statsData.path("shots");
+            
+            TeamStatsDTO.Attacking attacking = TeamStatsDTO.Attacking.builder()
+                    .goalsScored(safeInt(goals.path("for").path("total")))
+                    .penaltiesScored(safeInt(penalty.path("scored")))
+                    .penaltiesMissed(safeInt(penalty.path("missed")))
+                    .shotsOnGoal(safeInt(shots.path("on")))
+                    .shotsOffGoal(safeInt(shots.path("off")))
+                    .totalShots(safeInt(shots.path("total")))
+                    .build();
+
+            // Build Passing from passes
+            JsonNode passes = statsData.path("passes");
+            Integer totalPasses = safeInt(passes.path("total"));
+            Integer passesAccurate = safeInt(passes.path("accuracy"));
+            Double passAccuracyPercentage = null;
+            if (passesAccurate != null && totalPasses != null && totalPasses > 0) {
+                passAccuracyPercentage = (passesAccurate.doubleValue() / totalPasses.doubleValue()) * 100.0;
+            } else if (!passes.path("accuracy").isMissingNode()) {
+                // Try to parse percentage string if available
+                String accuracyStr = passes.path("accuracy").asText("");
+                if (!accuracyStr.isEmpty()) {
+                    try {
+                        String cleaned = accuracyStr.replace("%", "").trim();
+                        passAccuracyPercentage = Double.parseDouble(cleaned);
+                    } catch (NumberFormatException e) {
+                        log.debug("Could not parse pass accuracy: {}", accuracyStr);
+                    }
+                }
+            }
+
+            TeamStatsDTO.Passing passing = TeamStatsDTO.Passing.builder()
+                    .totalPasses(totalPasses)
+                    .passesAccurate(passesAccurate)
+                    .passAccuracyPercentage(passAccuracyPercentage)
+                    .build();
+
+            // Build Defending from goals against, clean sheets, saves, tackles, interceptions
+            JsonNode tackles = statsData.path("tackles");
+            // Saves might be in goals.saves or goalkeeper stats - try both paths
+            Integer saves = safeInt(statsData.path("goals").path("saves"));
+            if (saves == 0) {
+                saves = safeInt(statsData.path("goals").path("against").path("saves"));
+            }
+            // Interceptions might be under tackles or separate
+            Integer interceptions = safeInt(tackles.path("interceptions"));
+            if (interceptions == 0) {
+                interceptions = safeInt(statsData.path("interceptions"));
+            }
+            
+            TeamStatsDTO.Defending defending = TeamStatsDTO.Defending.builder()
+                    .goalsConceded(safeInt(goals.path("against").path("total")))
+                    .cleanSheets(safeInt(statsData.path("clean_sheet")))
+                    .saves(saves)
+                    .tackles(safeInt(tackles.path("total")))
+                    .interceptions(interceptions)
+                    .build();
+
+            // Build Other from cards, penalty, fouls, corners, offsides
+            JsonNode cards = statsData.path("cards");
+            JsonNode fouls = statsData.path("fouls");
+            JsonNode corners = statsData.path("corners");
+            JsonNode offsides = statsData.path("offsides");
+            
+            TeamStatsDTO.Other other = TeamStatsDTO.Other.builder()
+                    .yellowCards(safeInt(cards.path("yellow")))
+                    .redCards(safeInt(cards.path("red")))
+                    .fouls(safeInt(fouls))
+                    .corners(safeInt(corners))
+                    .offsides(safeInt(offsides))
+                    .build();
+
+            return TeamStatsDTO.builder()
+                    .summary(summary)
+                    .attacking(attacking)
+                    .passing(passing)
+                    .defending(defending)
+                    .other(other)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error fetching statistics for team ID {} in league {} season {}: {}", 
+                    teamId, leagueId, season, e.getMessage());
+            return buildDefaultStats();
         }
     }
 
-    private TeamStatsDTO parseStatisticsFromArray(JsonNode statsArray) {
-        // Aggregate statistics from all fixtures in the league
-        int matchesPlayed = 0;
-        int goalsScored = 0;
-        int cleanSheets = 0;
-        int yellowCards = 0;
-        int redCards = 0;
+    /**
+     * Get team statistics for a specific league (backward compatibility)
+     * Uses current season by default
+     */
+    public TeamStatsDTO getStatistics(Long teamId, Long leagueId) {
+        return getTeamStatistics(teamId, leagueId, null);
+    }
 
-        for (JsonNode matchStat : statsArray) {
-            matchesPlayed++;
-            JsonNode goals = matchStat.path("goals");
-            goalsScored += goals.path("for").path("total").asInt(0);
-            
-            // Clean sheet: goals against = 0
-            if (goals.path("against").path("total").asInt(0) == 0) {
-                cleanSheets++;
-            }
-
-            JsonNode cards = matchStat.path("cards");
-            yellowCards += cards.path("yellow").asInt(0);
-            redCards += cards.path("red").asInt(0);
-        }
-
-        double goalsPerGame = matchesPlayed > 0 ? (double) goalsScored / matchesPlayed : 0.0;
-
+    private TeamStatsDTO buildDefaultStats() {
         return TeamStatsDTO.builder()
-                .matchesPlayed(matchesPlayed)
-                .goalsScored(goalsScored)
-                .goalsPerGame(Math.round(goalsPerGame * 100.0) / 100.0)
-                .cleanSheets(cleanSheets)
-                .yellowCards(yellowCards)
-                .redCards(redCards)
+                .summary(TeamStatsDTO.Summary.builder()
+                        .played(0)
+                        .wins(0)
+                        .draws(0)
+                        .loses(0)
+                        .form("")
+                        .build())
+                .attacking(TeamStatsDTO.Attacking.builder()
+                        .goalsScored(0)
+                        .penaltiesScored(0)
+                        .penaltiesMissed(0)
+                        .shotsOnGoal(0)
+                        .shotsOffGoal(0)
+                        .totalShots(0)
+                        .build())
+                .passing(TeamStatsDTO.Passing.builder()
+                        .totalPasses(0)
+                        .passesAccurate(0)
+                        .passAccuracyPercentage(0.0)
+                        .build())
+                .defending(TeamStatsDTO.Defending.builder()
+                        .goalsConceded(0)
+                        .cleanSheets(0)
+                        .saves(0)
+                        .tackles(0)
+                        .interceptions(0)
+                        .build())
+                .other(TeamStatsDTO.Other.builder()
+                        .yellowCards(0)
+                        .redCards(0)
+                        .fouls(0)
+                        .corners(0)
+                        .offsides(0)
+                        .build())
                 .build();
+    }
+
+    private Integer safeInt(JsonNode node) {
+        if (node.isMissingNode() || node.isNull()) return 0;
+        if (node.isInt()) return node.asInt();
+        if (node.isTextual()) {
+            String text = node.asText("");
+            if (text.isEmpty()) return 0;
+            try {
+                return Integer.parseInt(text);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
+    private String safeString(JsonNode node) {
+        if (node.isMissingNode() || node.isNull()) return "";
+        String text = node.asText("");
+        return text != null ? text : "";
     }
 
     /**
