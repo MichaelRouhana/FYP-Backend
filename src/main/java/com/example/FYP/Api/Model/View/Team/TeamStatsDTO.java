@@ -19,27 +19,27 @@ public class TeamStatsDTO {
     private Integer cleanSheets;
     
     // Attacking
-    private Integer totalGoalsFor;
-    private String goalsForAverage;
-    private Integer shotsTotal;
+    private Integer goalsScored;
+    private String goalsPerMatch;
+    private Integer shots;
     private Integer shotsOnTarget;
     private Integer penaltiesScored;
     
     // Passing
-    private Integer passesTotal;
+    private Integer passes;
     private Integer passesAccurate;
-    private String passAccuracyPercentage;
+    private String passAccuracy;
     
     // Defending
-    private Integer totalGoalsAgainst;
-    private String goalsAgainstAverage;
-    private Integer tacklesTotal;
-    private Integer interceptionsTotal;
-    private Integer savesTotal;
+    private Integer goalsConceded;
+    private String goalsConcededPerMatch;
+    private Integer tackles;
+    private Integer interceptions;
+    private Integer saves;
     
     // Other
     private Integer yellowCards;
     private Integer redCards;
-    private Integer foulsCommitted;
+    private Integer fouls;
 }
 

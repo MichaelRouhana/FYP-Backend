@@ -285,7 +285,7 @@ public class TeamService {
     }
 
     private TeamStatsDTO parseStatistics(JsonNode stats) {
-        // Summary fields
+        // Summary fields - fixtures.played.total
         JsonNode fixtures = stats.path("fixtures");
         Integer matchesPlayed = safeInt(fixtures.path("played").path("total"));
         Integer wins = safeInt(fixtures.path("wins").path("total"));
@@ -298,36 +298,44 @@ public class TeamService {
         JsonNode goalsAgainst = goals.path("against");
         
         // Try both paths: goals.for.total and goals.for.total.total
-        Integer totalGoalsFor = safeInt(goalsFor.path("total"));
-        if (totalGoalsFor == null && goalsFor.path("total").isObject()) {
-            totalGoalsFor = safeInt(goalsFor.path("total").path("total"));
+        Integer goalsScored = safeInt(goalsFor.path("total"));
+        if (goalsScored == null && goalsFor.path("total").isObject()) {
+            goalsScored = safeInt(goalsFor.path("total").path("total"));
         }
         
-        String goalsForAverage = safeString(goalsFor.path("average"));
-        if (goalsForAverage == null && goalsFor.path("average").isObject()) {
-            goalsForAverage = safeString(goalsFor.path("average").path("total"));
+        // Goals per match - goals.for.average.total or goals.for.average
+        String goalsPerMatch = null;
+        JsonNode goalsForAverage = goalsFor.path("average");
+        if (goalsForAverage.isObject()) {
+            goalsPerMatch = safeString(goalsForAverage.path("total"));
+        } else {
+            goalsPerMatch = safeString(goalsForAverage);
         }
         
-        Integer totalGoalsAgainst = safeInt(goalsAgainst.path("total"));
-        if (totalGoalsAgainst == null && goalsAgainst.path("total").isObject()) {
-            totalGoalsAgainst = safeInt(goalsAgainst.path("total").path("total"));
+        Integer goalsConceded = safeInt(goalsAgainst.path("total"));
+        if (goalsConceded == null && goalsAgainst.path("total").isObject()) {
+            goalsConceded = safeInt(goalsAgainst.path("total").path("total"));
         }
         
-        String goalsAgainstAverage = safeString(goalsAgainst.path("average"));
-        if (goalsAgainstAverage == null && goalsAgainst.path("average").isObject()) {
-            goalsAgainstAverage = safeString(goalsAgainst.path("average").path("total"));
+        // Goals conceded per match - goals.against.average.total or goals.against.average
+        String goalsConcededPerMatch = null;
+        JsonNode goalsAgainstAverage = goalsAgainst.path("average");
+        if (goalsAgainstAverage.isObject()) {
+            goalsConcededPerMatch = safeString(goalsAgainstAverage.path("total"));
+        } else {
+            goalsConcededPerMatch = safeString(goalsAgainstAverage);
         }
         
-        // Goal difference
+        // Goal difference - calculate from goals scored and conceded
         Integer goalDifference = null;
-        if (totalGoalsFor != null && totalGoalsAgainst != null) {
-            goalDifference = totalGoalsFor - totalGoalsAgainst;
+        if (goalsScored != null && goalsConceded != null) {
+            goalDifference = goalsScored - goalsConceded;
         }
         
         // Clean sheets - API structure: clean_sheet.total
         Integer cleanSheets = safeInt(stats.path("clean_sheet").path("total"));
         
-        // Attacking
+        // Attacking - shots.total, shots.on.total, penalty.scored.total
         JsonNode shots = stats.path("shots");
         Integer shotsTotal = safeInt(shots.path("total"));
         Integer shotsOnTarget = safeInt(shots.path("on").path("total"));
@@ -335,28 +343,28 @@ public class TeamService {
         JsonNode penalty = stats.path("penalty");
         Integer penaltiesScored = safeInt(penalty.path("scored").path("total"));
         
-        // Passing
+        // Passing - passes.total, passes.accurate, passes.percentage
         JsonNode passes = stats.path("passes");
         Integer passesTotal = safeInt(passes.path("total"));
         Integer passesAccurate = safeInt(passes.path("accurate"));
-        String passAccuracyPercentage = safeString(passes.path("percentage"));
+        String passAccuracy = safeString(passes.path("percentage"));
         
-        // Defending
+        // Defending - tackles.total, tackles.interceptions, goalkeeper.saves
         JsonNode tackles = stats.path("tackles");
         Integer tacklesTotal = safeInt(tackles.path("total"));
-        Integer interceptionsTotal = safeInt(tackles.path("interceptions"));
+        Integer interceptions = safeInt(tackles.path("interceptions"));
         
         JsonNode goalkeeper = stats.path("goalkeeper");
-        Integer savesTotal = safeInt(goalkeeper.path("saves"));
+        Integer saves = safeInt(goalkeeper.path("saves"));
         
-        // Cards - aggregate from cards map structure
+        // Cards - aggregate from cards map structure (time buckets like "0-15", "16-30", etc.)
         JsonNode cards = stats.path("cards");
         Integer yellowCards = aggregateCardCount(cards.path("yellow"));
         Integer redCards = aggregateCardCount(cards.path("red"));
         
-        // Fouls
-        JsonNode fouls = stats.path("fouls");
-        Integer foulsCommitted = safeInt(fouls.path("committed").path("total"));
+        // Fouls - fouls.committed.total
+        JsonNode foulsNode = stats.path("fouls");
+        Integer fouls = safeInt(foulsNode.path("committed").path("total"));
         
         return TeamStatsDTO.builder()
                 .matchesPlayed(matchesPlayed != null ? matchesPlayed : 0)
@@ -365,22 +373,22 @@ public class TeamService {
                 .losses(losses != null ? losses : 0)
                 .goalDifference(goalDifference != null ? goalDifference : 0)
                 .cleanSheets(cleanSheets != null ? cleanSheets : 0)
-                .totalGoalsFor(totalGoalsFor != null ? totalGoalsFor : 0)
-                .goalsForAverage(goalsForAverage != null ? goalsForAverage : "0.00")
-                .shotsTotal(shotsTotal != null ? shotsTotal : 0)
+                .goalsScored(goalsScored != null ? goalsScored : 0)
+                .goalsPerMatch(goalsPerMatch != null ? goalsPerMatch : "0.00")
+                .shots(shotsTotal != null ? shotsTotal : 0)
                 .shotsOnTarget(shotsOnTarget != null ? shotsOnTarget : 0)
                 .penaltiesScored(penaltiesScored != null ? penaltiesScored : 0)
-                .passesTotal(passesTotal != null ? passesTotal : 0)
+                .passes(passesTotal != null ? passesTotal : 0)
                 .passesAccurate(passesAccurate != null ? passesAccurate : 0)
-                .passAccuracyPercentage(passAccuracyPercentage != null ? passAccuracyPercentage : "0%")
-                .totalGoalsAgainst(totalGoalsAgainst != null ? totalGoalsAgainst : 0)
-                .goalsAgainstAverage(goalsAgainstAverage != null ? goalsAgainstAverage : "0.00")
-                .tacklesTotal(tacklesTotal != null ? tacklesTotal : 0)
-                .interceptionsTotal(interceptionsTotal != null ? interceptionsTotal : 0)
-                .savesTotal(savesTotal != null ? savesTotal : 0)
+                .passAccuracy(passAccuracy != null ? passAccuracy : "0%")
+                .goalsConceded(goalsConceded != null ? goalsConceded : 0)
+                .goalsConcededPerMatch(goalsConcededPerMatch != null ? goalsConcededPerMatch : "0.00")
+                .tackles(tacklesTotal != null ? tacklesTotal : 0)
+                .interceptions(interceptions != null ? interceptions : 0)
+                .saves(saves != null ? saves : 0)
                 .yellowCards(yellowCards != null ? yellowCards : 0)
                 .redCards(redCards != null ? redCards : 0)
-                .foulsCommitted(foulsCommitted != null ? foulsCommitted : 0)
+                .fouls(fouls != null ? fouls : 0)
                 .build();
     }
     
@@ -408,26 +416,37 @@ public class TeamService {
     /**
      * Aggregate card counts from a map structure like:
      * "yellow": {
-     *   "0-15": {...},
-     *   "16-30": {...},
+     *   "0-15": {"total": 5},
+     *   "16-30": {"total": 3},
      *   ...
      * }
+     * Iterates through all time-bucket keys and sums up the totals.
      */
     private Integer aggregateCardCount(JsonNode cardMap) {
-        if (cardMap.isMissingNode() || cardMap.isNull()) return 0;
+        if (cardMap.isMissingNode() || cardMap.isNull()) {
+            return 0;
+        }
+        
         if (cardMap.isObject()) {
             int total = 0;
-            for (JsonNode cardNode : cardMap) {
-                if (cardNode.isObject() && cardNode.has("total")) {
+            Iterator<String> fieldNames = cardMap.fieldNames();
+            while (fieldNames.hasNext()) {
+                String fieldName = fieldNames.next();
+                JsonNode cardNode = cardMap.path(fieldName);
+                if (cardNode.isObject()) {
+                    // Extract total from each time bucket (e.g., "0-15", "16-30")
                     total += cardNode.path("total").asInt(0);
                 }
             }
-            return total > 0 ? total : null;
+            return total > 0 ? total : 0;
         }
+        
+        // If it's already an integer, return it directly
         if (cardMap.isInt()) {
             return cardMap.asInt();
         }
-        return null;
+        
+        return 0;
     }
     
     private TeamStatsDTO getDefaultStats() {
@@ -438,22 +457,22 @@ public class TeamService {
                 .losses(0)
                 .goalDifference(0)
                 .cleanSheets(0)
-                .totalGoalsFor(0)
-                .goalsForAverage("0.00")
-                .shotsTotal(0)
+                .goalsScored(0)
+                .goalsPerMatch("0.00")
+                .shots(0)
                 .shotsOnTarget(0)
                 .penaltiesScored(0)
-                .passesTotal(0)
+                .passes(0)
                 .passesAccurate(0)
-                .passAccuracyPercentage("0%")
-                .totalGoalsAgainst(0)
-                .goalsAgainstAverage("0.00")
-                .tacklesTotal(0)
-                .interceptionsTotal(0)
-                .savesTotal(0)
+                .passAccuracy("0%")
+                .goalsConceded(0)
+                .goalsConcededPerMatch("0.00")
+                .tackles(0)
+                .interceptions(0)
+                .saves(0)
                 .yellowCards(0)
                 .redCards(0)
-                .foulsCommitted(0)
+                .fouls(0)
                 .build();
     }
 
