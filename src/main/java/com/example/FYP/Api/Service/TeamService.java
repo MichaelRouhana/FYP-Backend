@@ -162,81 +162,178 @@ public class TeamService {
             
             if (!response.isArray() || response.size() == 0) {
                 // Return default stats if API doesn't have data
-                return TeamStatsDTO.builder()
-                        .matchesPlayed(0)
-                        .goalsScored(0)
-                        .goalsPerGame(0.0)
-                        .cleanSheets(0)
-                        .yellowCards(0)
-                        .redCards(0)
-                        .build();
+                return getDefaultStats();
             }
 
-            // API-Sports returns statistics in a specific format
-            JsonNode leagueStats = response.get(0).path("league").path("statistics");
-            if (leagueStats.isMissingNode() || !leagueStats.isArray() || leagueStats.size() == 0) {
-                // Try alternative path: response[0].statistics
-                JsonNode altStats = response.get(0).path("statistics");
-                if (altStats.isMissingNode() || !altStats.isArray() || altStats.size() == 0) {
-                    return TeamStatsDTO.builder()
-                            .matchesPlayed(0)
-                            .goalsScored(0)
-                            .goalsPerGame(0.0)
-                            .cleanSheets(0)
-                            .yellowCards(0)
-                            .redCards(0)
-                            .build();
-                }
-                return parseStatisticsFromArray(altStats);
+            // API-Sports returns: response[0].league.statistics (aggregated statistics object)
+            JsonNode statistics = response.get(0).path("league").path("statistics");
+            if (statistics.isMissingNode() || !statistics.isObject()) {
+                // Return default stats if structure doesn't match
+                return getDefaultStats();
             }
 
-            return parseStatisticsFromArray(leagueStats);
+            return parseStatistics(statistics);
         } catch (Exception e) {
             log.error("Error fetching statistics for team ID {} in league {}: {}", teamId, leagueId, e.getMessage());
             // Return default stats on error
-            return TeamStatsDTO.builder()
-                    .matchesPlayed(0)
-                    .goalsScored(0)
-                    .goalsPerGame(0.0)
-                    .cleanSheets(0)
-                    .yellowCards(0)
-                    .redCards(0)
-                    .build();
+            return getDefaultStats();
         }
     }
 
-    private TeamStatsDTO parseStatisticsFromArray(JsonNode statsArray) {
-        // Aggregate statistics from all fixtures in the league
-        int matchesPlayed = 0;
-        int goalsScored = 0;
-        int cleanSheets = 0;
-        int yellowCards = 0;
-        int redCards = 0;
-
-        for (JsonNode matchStat : statsArray) {
-            matchesPlayed++;
-            JsonNode goals = matchStat.path("goals");
-            goalsScored += goals.path("for").path("total").asInt(0);
-            
-            // Clean sheet: goals against = 0
-            if (goals.path("against").path("total").asInt(0) == 0) {
-                cleanSheets++;
-            }
-
-            JsonNode cards = matchStat.path("cards");
-            yellowCards += cards.path("yellow").asInt(0);
-            redCards += cards.path("red").asInt(0);
+    private TeamStatsDTO parseStatistics(JsonNode stats) {
+        // Summary fields
+        JsonNode fixtures = stats.path("fixtures");
+        Integer matchesPlayed = safeInt(fixtures.path("played").path("total"));
+        Integer wins = safeInt(fixtures.path("wins").path("total"));
+        Integer draws = safeInt(fixtures.path("draws").path("total"));
+        Integer losses = safeInt(fixtures.path("loses").path("total"));
+        
+        // Goals
+        JsonNode goals = stats.path("goals");
+        JsonNode goalsFor = goals.path("for");
+        JsonNode goalsAgainst = goals.path("against");
+        
+        Integer totalGoalsFor = safeInt(goalsFor.path("total"));
+        String goalsForAverage = safeString(goalsFor.path("average").path("total"));
+        Integer totalGoalsAgainst = safeInt(goalsAgainst.path("total"));
+        String goalsAgainstAverage = safeString(goalsAgainst.path("average").path("total"));
+        
+        // Goal difference
+        Integer goalDifference = null;
+        if (totalGoalsFor != null && totalGoalsAgainst != null) {
+            goalDifference = totalGoalsFor - totalGoalsAgainst;
         }
-
-        double goalsPerGame = matchesPlayed > 0 ? (double) goalsScored / matchesPlayed : 0.0;
-
+        
+        // Clean sheets
+        Integer cleanSheets = safeInt(stats.path("clean_sheet").path("total"));
+        
+        // Attacking
+        JsonNode shots = stats.path("shots");
+        Integer shotsTotal = safeInt(shots.path("total"));
+        Integer shotsOnTarget = safeInt(shots.path("on").path("total"));
+        
+        JsonNode penalty = stats.path("penalty");
+        Integer penaltiesScored = safeInt(penalty.path("scored").path("total"));
+        
+        // Passing
+        JsonNode passes = stats.path("passes");
+        Integer passesTotal = safeInt(passes.path("total"));
+        Integer passesAccurate = safeInt(passes.path("accurate"));
+        String passAccuracyPercentage = safeString(passes.path("percentage"));
+        
+        // Defending
+        JsonNode tackles = stats.path("tackles");
+        Integer tacklesTotal = safeInt(tackles.path("total"));
+        Integer interceptionsTotal = safeInt(tackles.path("interceptions"));
+        
+        JsonNode goalkeeper = stats.path("goalkeeper");
+        Integer savesTotal = safeInt(goalkeeper.path("saves"));
+        
+        // Cards - aggregate from cards map structure
+        JsonNode cards = stats.path("cards");
+        Integer yellowCards = aggregateCardCount(cards.path("yellow"));
+        Integer redCards = aggregateCardCount(cards.path("red"));
+        
+        // Fouls
+        JsonNode fouls = stats.path("fouls");
+        Integer foulsCommitted = safeInt(fouls.path("committed").path("total"));
+        
         return TeamStatsDTO.builder()
-                .matchesPlayed(matchesPlayed)
-                .goalsScored(goalsScored)
-                .goalsPerGame(Math.round(goalsPerGame * 100.0) / 100.0)
-                .cleanSheets(cleanSheets)
-                .yellowCards(yellowCards)
-                .redCards(redCards)
+                .matchesPlayed(matchesPlayed != null ? matchesPlayed : 0)
+                .wins(wins != null ? wins : 0)
+                .draws(draws != null ? draws : 0)
+                .losses(losses != null ? losses : 0)
+                .goalDifference(goalDifference != null ? goalDifference : 0)
+                .cleanSheets(cleanSheets != null ? cleanSheets : 0)
+                .totalGoalsFor(totalGoalsFor != null ? totalGoalsFor : 0)
+                .goalsForAverage(goalsForAverage != null ? goalsForAverage : "0.00")
+                .shotsTotal(shotsTotal != null ? shotsTotal : 0)
+                .shotsOnTarget(shotsOnTarget != null ? shotsOnTarget : 0)
+                .penaltiesScored(penaltiesScored != null ? penaltiesScored : 0)
+                .passesTotal(passesTotal != null ? passesTotal : 0)
+                .passesAccurate(passesAccurate != null ? passesAccurate : 0)
+                .passAccuracyPercentage(passAccuracyPercentage != null ? passAccuracyPercentage : "0%")
+                .totalGoalsAgainst(totalGoalsAgainst != null ? totalGoalsAgainst : 0)
+                .goalsAgainstAverage(goalsAgainstAverage != null ? goalsAgainstAverage : "0.00")
+                .tacklesTotal(tacklesTotal != null ? tacklesTotal : 0)
+                .interceptionsTotal(interceptionsTotal != null ? interceptionsTotal : 0)
+                .savesTotal(savesTotal != null ? savesTotal : 0)
+                .yellowCards(yellowCards != null ? yellowCards : 0)
+                .redCards(redCards != null ? redCards : 0)
+                .foulsCommitted(foulsCommitted != null ? foulsCommitted : 0)
+                .build();
+    }
+    
+    private Integer safeInt(JsonNode node) {
+        if (node.isMissingNode() || node.isNull()) return null;
+        if (node.isInt()) return node.asInt();
+        if (node.isTextual()) {
+            String text = node.asText("");
+            if (text.isEmpty()) return null;
+            try {
+                return Integer.parseInt(text);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+    
+    private String safeString(JsonNode node) {
+        if (node.isMissingNode() || node.isNull()) return null;
+        String text = node.asText("");
+        return text.isEmpty() ? null : text;
+    }
+    
+    /**
+     * Aggregate card counts from a map structure like:
+     * "yellow": {
+     *   "0-15": {...},
+     *   "16-30": {...},
+     *   ...
+     * }
+     */
+    private Integer aggregateCardCount(JsonNode cardMap) {
+        if (cardMap.isMissingNode() || cardMap.isNull()) return 0;
+        if (cardMap.isObject()) {
+            int total = 0;
+            for (JsonNode cardNode : cardMap) {
+                if (cardNode.isObject() && cardNode.has("total")) {
+                    total += cardNode.path("total").asInt(0);
+                }
+            }
+            return total > 0 ? total : null;
+        }
+        if (cardMap.isInt()) {
+            return cardMap.asInt();
+        }
+        return null;
+    }
+    
+    private TeamStatsDTO getDefaultStats() {
+        return TeamStatsDTO.builder()
+                .matchesPlayed(0)
+                .wins(0)
+                .draws(0)
+                .losses(0)
+                .goalDifference(0)
+                .cleanSheets(0)
+                .totalGoalsFor(0)
+                .goalsForAverage("0.00")
+                .shotsTotal(0)
+                .shotsOnTarget(0)
+                .penaltiesScored(0)
+                .passesTotal(0)
+                .passesAccurate(0)
+                .passAccuracyPercentage("0%")
+                .totalGoalsAgainst(0)
+                .goalsAgainstAverage("0.00")
+                .tacklesTotal(0)
+                .interceptionsTotal(0)
+                .savesTotal(0)
+                .yellowCards(0)
+                .redCards(0)
+                .foulsCommitted(0)
                 .build();
     }
 
