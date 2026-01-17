@@ -62,25 +62,25 @@ public class PlayerService {
 
             // Build Summary
             PlayerDetailedStatsDTO.Summary summary = PlayerDetailedStatsDTO.Summary.builder()
-                    .matchesPlayed(safeInt(games.path("appearences")))
-                    .minutesPlayed(safeInt(games.path("minutes")))
-                    .goals(safeInt(goals.path("total")))
-                    .assists(safeInt(goals.path("assists")))
-                    .rating(safeString(games.path("rating")))
+                    .matchesPlayed(safeIntOrZero(games.path("appearences")))
+                    .minutesPlayed(safeIntOrZero(games.path("minutes")))
+                    .goals(safeIntOrZero(goals.path("total")))
+                    .assists(safeIntOrZero(goals.path("assists")))
+                    .rating(safeStringOrDash(games.path("rating")))
                     .build();
 
             // Build Attacking
             PlayerDetailedStatsDTO.Attacking attacking = PlayerDetailedStatsDTO.Attacking.builder()
-                    .shotsTotal(safeInt(shots.path("total")))
-                    .shotsOnTarget(safeInt(shots.path("on")))
-                    .dribblesAttempted(safeInt(dribbles.path("attempts")))
-                    .dribblesSuccess(safeInt(dribbles.path("success")))
-                    .penaltiesScored(safeInt(penalty.path("scored")))
-                    .penaltiesMissed(safeInt(penalty.path("missed")))
+                    .shotsTotal(safeIntOrZero(shots.path("total")))
+                    .shotsOnTarget(safeIntOrZero(shots.path("on")))
+                    .dribblesAttempted(safeIntOrZero(dribbles.path("attempts")))
+                    .dribblesSuccess(safeIntOrZero(dribbles.path("success")))
+                    .penaltiesScored(safeIntOrZero(penalty.path("scored")))
+                    .penaltiesMissed(safeIntOrZero(penalty.path("missed")))
                     .build();
 
             // Build Passing
-            Integer passAccuracy = null;
+            Integer passAccuracy = 0;
             if (!passes.path("accuracy").isMissingNode() && !passes.path("accuracy").isNull()) {
                 String accuracyStr = passes.path("accuracy").asText("");
                 if (!accuracyStr.isEmpty()) {
@@ -95,26 +95,26 @@ public class PlayerService {
             }
 
             PlayerDetailedStatsDTO.Passing passing = PlayerDetailedStatsDTO.Passing.builder()
-                    .totalPasses(safeInt(passes.path("total")))
-                    .keyPasses(safeInt(passes.path("key")))
+                    .totalPasses(safeIntOrZero(passes.path("total")))
+                    .keyPasses(safeIntOrZero(passes.path("key")))
                     .passAccuracy(passAccuracy)
                     .build();
 
             // Build Defending
             PlayerDetailedStatsDTO.Defending defending = PlayerDetailedStatsDTO.Defending.builder()
-                    .tacklesTotal(safeInt(tackles.path("total")))
-                    .interceptions(safeInt(tackles.path("interceptions")))
-                    .blocks(safeInt(tackles.path("blocks")))
-                    .duelsTotal(safeInt(duels.path("total")))
-                    .duelsWon(safeInt(duels.path("won")))
+                    .tacklesTotal(safeIntOrZero(tackles.path("total")))
+                    .interceptions(safeIntOrZero(tackles.path("interceptions")))
+                    .blocks(safeIntOrZero(tackles.path("blocks")))
+                    .duelsTotal(safeIntOrZero(duels.path("total")))
+                    .duelsWon(safeIntOrZero(duels.path("won")))
                     .build();
 
             // Build Discipline
             PlayerDetailedStatsDTO.Discipline discipline = PlayerDetailedStatsDTO.Discipline.builder()
-                    .yellowCards(safeInt(cards.path("yellow")))
-                    .redCards(safeInt(cards.path("red")))
-                    .foulsCommitted(safeInt(fouls.path("committed")))
-                    .foulsDrawn(safeInt(fouls.path("drawn")))
+                    .yellowCards(safeIntOrZero(cards.path("yellow")))
+                    .redCards(safeIntOrZero(cards.path("red")))
+                    .foulsCommitted(safeIntOrZero(fouls.path("committed")))
+                    .foulsDrawn(safeIntOrZero(fouls.path("drawn")))
                     .build();
 
             return PlayerDetailedStatsDTO.builder()
@@ -172,10 +172,20 @@ public class PlayerService {
         return null;
     }
 
+    private Integer safeIntOrZero(JsonNode node) {
+        Integer value = safeInt(node);
+        return value != null ? value : 0;
+    }
+
     private String safeString(JsonNode node) {
         if (node.isMissingNode() || node.isNull()) return null;
         String text = node.asText("");
         return text.isEmpty() ? null : text;
+    }
+
+    private String safeStringOrDash(JsonNode node) {
+        String value = safeString(node);
+        return value != null && !value.isEmpty() ? value : "-";
     }
 }
 
