@@ -284,6 +284,49 @@ public class TeamService {
         return getTeamStatistics(teamId, leagueId, null);
     }
 
+    /**
+     * Get mock team statistics for testing UI when API credits are exhausted
+     * Returns dummy data to test the frontend display
+     */
+    public TeamStatsDTO getMockTeamStatistics(Long teamId) {
+        return TeamStatsDTO.builder()
+                .summary(TeamStatsDTO.Summary.builder()
+                        .played(20)
+                        .wins(10)
+                        .draws(5)
+                        .loses(5)
+                        .form("WDLWW")
+                        .build())
+                .attacking(TeamStatsDTO.Attacking.builder()
+                        .goalsScored(35)
+                        .penaltiesScored(3)
+                        .penaltiesMissed(1)
+                        .shotsOnGoal(150)
+                        .shotsOffGoal(80)
+                        .totalShots(230)
+                        .build())
+                .passing(TeamStatsDTO.Passing.builder()
+                        .totalPasses(10000)
+                        .passesAccurate(8500)
+                        .passAccuracyPercentage(85.0)
+                        .build())
+                .defending(TeamStatsDTO.Defending.builder()
+                        .goalsConceded(20)
+                        .cleanSheets(8)
+                        .saves(50)
+                        .tackles(300)
+                        .interceptions(120)
+                        .build())
+                .other(TeamStatsDTO.Other.builder()
+                        .yellowCards(40)
+                        .redCards(2)
+                        .fouls(250)
+                        .corners(100)
+                        .offsides(30)
+                        .build())
+                .build();
+    }
+
     private TeamStatsDTO buildDefaultStats() {
         return TeamStatsDTO.builder()
                 .summary(TeamStatsDTO.Summary.builder()
