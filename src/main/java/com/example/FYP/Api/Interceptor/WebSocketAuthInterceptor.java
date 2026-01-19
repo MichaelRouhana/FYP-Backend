@@ -1,4 +1,4 @@
-package com.example.FYP.Api.Messaging.WebSocket;
+package com.example.FYP.Api.Interceptor;
 
 import com.example.FYP.Api.Service.JwtService;
 import lombok.RequiredArgsConstructor;

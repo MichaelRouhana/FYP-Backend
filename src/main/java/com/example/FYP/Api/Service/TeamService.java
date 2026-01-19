@@ -166,24 +166,37 @@ public class TeamService {
             // Fetch team statistics from external API
             String jsonResponse = fetchFromApi("teams/statistics", 
                     Map.of("team", teamId.toString(), "league", leagueId.toString(), "season", season.toString()));
+            
+            // Log the raw response for debugging
+            log.info("API Response for team {} league {} season {}: {}", teamId, leagueId, season, jsonResponse);
+            
             JsonNode root = objectMapper.readTree(jsonResponse);
             JsonNode response = root.path("response");
             
-            if (!response.isArray() || response.size() == 0) {
+            // Check for API errors
+            if (root.has("errors") && root.path("errors").size() > 0) {
+                log.error("API returned errors: {}", root.path("errors"));
                 return buildDefaultStats();
             }
-
-            // API-Football returns: response[0] contains the statistics object
-            JsonNode statsData = response.get(0);
+            
+            // API-Football /teams/statistics returns response as an OBJECT, not an array
+            if (response.isMissingNode() || response.isNull()) {
+                log.warn("Missing response for team {} league {} season {}", teamId, leagueId, season);
+                return buildDefaultStats();
+            }
+            
+            // The response is already the statistics object (not an array)
+            JsonNode statsData = response;
             
             // Build Summary from fixtures
+            // API-Football returns: fixtures.played.total, fixtures.wins.total, etc.
             JsonNode fixtures = statsData.path("fixtures");
             TeamStatsDTO.Summary summary = TeamStatsDTO.Summary.builder()
-                    .played(safeInt(fixtures.path("played")))
-                    .wins(safeInt(fixtures.path("wins")))
-                    .draws(safeInt(fixtures.path("draws")))
-                    .loses(safeInt(fixtures.path("loses")))
-                    .form(safeString(fixtures.path("form")))
+                    .played(safeInt(fixtures.path("played").path("total")))
+                    .wins(safeInt(fixtures.path("wins").path("total")))
+                    .draws(safeInt(fixtures.path("draws").path("total")))
+                    .loses(safeInt(fixtures.path("loses").path("total")))
+                    .form(safeString(statsData.path("form"))) // form is at root level
                     .build();
 
             // Build Attacking from goals, penalty, and shots
@@ -192,9 +205,9 @@ public class TeamService {
             JsonNode shots = statsData.path("shots");
             
             TeamStatsDTO.Attacking attacking = TeamStatsDTO.Attacking.builder()
-                    .goalsScored(safeInt(goals.path("for").path("total")))
-                    .penaltiesScored(safeInt(penalty.path("scored")))
-                    .penaltiesMissed(safeInt(penalty.path("missed")))
+                    .goalsScored(safeInt(goals.path("for").path("total").path("total"))) // goals.for.total.total
+                    .penaltiesScored(safeInt(penalty.path("scored").path("total"))) // penalty.scored.total
+                    .penaltiesMissed(safeInt(penalty.path("missed").path("total"))) // penalty.missed.total
                     .shotsOnGoal(safeInt(shots.path("on")))
                     .shotsOffGoal(safeInt(shots.path("off")))
                     .totalShots(safeInt(shots.path("total")))
@@ -240,8 +253,8 @@ public class TeamService {
             }
             
             TeamStatsDTO.Defending defending = TeamStatsDTO.Defending.builder()
-                    .goalsConceded(safeInt(goals.path("against").path("total")))
-                    .cleanSheets(safeInt(statsData.path("clean_sheet")))
+                    .goalsConceded(safeInt(goals.path("against").path("total").path("total"))) // goals.against.total.total
+                    .cleanSheets(safeInt(statsData.path("clean_sheet").path("total"))) // clean_sheet.total
                     .saves(saves)
                     .tackles(safeInt(tackles.path("total")))
                     .interceptions(interceptions)
@@ -253,12 +266,41 @@ public class TeamService {
             JsonNode corners = statsData.path("corners");
             JsonNode offsides = statsData.path("offsides");
             
+            // Cards structure: cards.yellow and cards.red are objects with time-based breakdowns
+            // We need to sum them up or get total if available
+            Integer yellowCards = 0;
+            Integer redCards = 0;
+            if (!cards.isMissingNode()) {
+                // Try to get total from yellow/red objects, or sum the time periods
+                JsonNode yellow = cards.path("yellow");
+                if (yellow.has("total")) {
+                    yellowCards = safeInt(yellow.path("total"));
+                } else if (yellow.isObject()) {
+                    // Sum all time periods if total not available
+                    yellowCards = yellow.findValues("total").stream()
+                            .filter(JsonNode::isInt)
+                            .mapToInt(JsonNode::asInt)
+                            .sum();
+                }
+                
+                JsonNode red = cards.path("red");
+                if (red.has("total")) {
+                    redCards = safeInt(red.path("total"));
+                } else if (red.isObject()) {
+                    // Sum all time periods if total not available
+                    redCards = red.findValues("total").stream()
+                            .filter(JsonNode::isInt)
+                            .mapToInt(JsonNode::asInt)
+                            .sum();
+                }
+            }
+            
             TeamStatsDTO.Other other = TeamStatsDTO.Other.builder()
-                    .yellowCards(safeInt(cards.path("yellow")))
-                    .redCards(safeInt(cards.path("red")))
-                    .fouls(safeInt(fouls))
-                    .corners(safeInt(corners))
-                    .offsides(safeInt(offsides))
+                    .yellowCards(yellowCards)
+                    .redCards(redCards)
+                    .fouls(safeInt(fouls.path("committed"))) // fouls.committed
+                    .corners(safeInt(corners.path("total"))) // corners.total
+                    .offsides(safeInt(offsides.path("total"))) // offsides.total
                     .build();
 
             return TeamStatsDTO.builder()
@@ -475,14 +517,24 @@ public class TeamService {
         headers.set("x-apisports-key", apiKey);
         HttpEntity<String> entity = new HttpEntity<>(headers);
 
-        ResponseEntity<String> response = restTemplate.exchange(
-                urlBuilder.toString(),
-                HttpMethod.GET,
-                entity,
-                String.class
-        );
-
-        return response.getBody();
+        try {
+            log.debug("Calling API: {}", urlBuilder.toString());
+            ResponseEntity<String> response = restTemplate.exchange(
+                    urlBuilder.toString(),
+                    HttpMethod.GET,
+                    entity,
+                    String.class
+            );
+            
+            if (response.getStatusCode().isError()) {
+                log.error("API returned error status: {} - Body: {}", response.getStatusCode(), response.getBody());
+            }
+            
+            return response.getBody();
+        } catch (Exception e) {
+            log.error("Error calling API endpoint {}: {}", urlBuilder.toString(), e.getMessage(), e);
+            throw e;
+        }
     }
 
     private Integer extractUefaRanking(JsonNode teamData) {
