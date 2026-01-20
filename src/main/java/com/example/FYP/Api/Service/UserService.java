@@ -341,10 +341,30 @@ public class UserService {
      * @return UserViewDTO with populated statistics
      */
     private UserViewDTO mapUserToViewDTO(User user) {
-        // Calculate betting statistics
-        long totalBets = betRepository.countByUserId(user.getId());
-        long totalWins = betRepository.countByUserIdAndStatus(user.getId(), BetStatus.WON);
-        double winRate = totalBets > 0 ? (double) totalWins / totalBets * 100.0 : 0.0;
+        // Calculate betting statistics - count distinct tickets (not legs)
+        // Count distinct ticketIds + bets with NULL ticketId (if any)
+        long distinctTickets = betRepository.countDistinctTicketsByUserId(user.getId());
+        long nullTicketBets = betRepository.findByUserId(user.getId()).stream()
+                .filter(bet -> bet.getTicketId() == null || bet.getTicketId().isEmpty())
+                .count();
+        long totalBets = distinctTickets + nullTicketBets;
+        
+        long distinctWonTickets = betRepository.countDistinctTicketsByUserIdAndStatus(user.getId(), BetStatus.WON);
+        long nullTicketWonBets = betRepository.findByUserId(user.getId()).stream()
+                .filter(bet -> (bet.getTicketId() == null || bet.getTicketId().isEmpty()) && bet.getStatus() == BetStatus.WON)
+                .count();
+        long totalWins = distinctWonTickets + nullTicketWonBets;
+        
+        // Calculate total lost bets (excluding pending)
+        long distinctLostTickets = betRepository.countDistinctTicketsByUserIdAndStatus(user.getId(), BetStatus.LOST);
+        long nullTicketLostBets = betRepository.findByUserId(user.getId()).stream()
+                .filter(bet -> (bet.getTicketId() == null || bet.getTicketId().isEmpty()) && bet.getStatus() == BetStatus.LOST)
+                .count();
+        long totalLost = distinctLostTickets + nullTicketLostBets;
+        
+        // Calculate win rate (percentage) - only count resolved bets (won + lost), exclude pending
+        long resolvedBets = totalWins + totalLost;
+        double winRate = resolvedBets > 0 ? (double) totalWins / resolvedBets * 100.0 : 0.0;
         
         // Map to DTO
         UserViewDTO dto = new UserViewDTO();
@@ -355,6 +375,7 @@ public class UserService {
         dto.setTotalPoints(user.getPoints() != null ? user.getPoints() : 0L);
         dto.setTotalBets(totalBets);
         dto.setTotalWins(totalWins);
+        dto.setTotalLost(totalLost);
         dto.setWinRate(winRate);
         dto.setAbout(user.getAbout());
         

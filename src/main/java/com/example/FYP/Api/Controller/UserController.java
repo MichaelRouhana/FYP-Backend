@@ -186,12 +186,30 @@ public class UserController {
     public ResponseEntity<UserViewDTO> getProfile() {
         User currentUser = securityContext.getCurrentUser();
         
-        // Calculate betting statistics
-        long totalBets = betRepository.countByUserId(currentUser.getId());
-        long totalWins = betRepository.countByUserIdAndStatus(currentUser.getId(), BetStatus.WON);
+        // Calculate betting statistics - count distinct tickets (not legs)
+        // Count distinct ticketIds + bets with NULL ticketId (if any)
+        long distinctTickets = betRepository.countDistinctTicketsByUserId(currentUser.getId());
+        long nullTicketBets = betRepository.findByUserId(currentUser.getId()).stream()
+                .filter(bet -> bet.getTicketId() == null || bet.getTicketId().isEmpty())
+                .count();
+        long totalBets = distinctTickets + nullTicketBets;
         
-        // Calculate win rate (percentage)
-        double winRate = totalBets > 0 ? (double) totalWins / totalBets * 100.0 : 0.0;
+        long distinctWonTickets = betRepository.countDistinctTicketsByUserIdAndStatus(currentUser.getId(), BetStatus.WON);
+        long nullTicketWonBets = betRepository.findByUserId(currentUser.getId()).stream()
+                .filter(bet -> (bet.getTicketId() == null || bet.getTicketId().isEmpty()) && bet.getStatus() == BetStatus.WON)
+                .count();
+        long totalWins = distinctWonTickets + nullTicketWonBets;
+        
+        // Calculate total lost bets (excluding pending)
+        long distinctLostTickets = betRepository.countDistinctTicketsByUserIdAndStatus(currentUser.getId(), BetStatus.LOST);
+        long nullTicketLostBets = betRepository.findByUserId(currentUser.getId()).stream()
+                .filter(bet -> (bet.getTicketId() == null || bet.getTicketId().isEmpty()) && bet.getStatus() == BetStatus.LOST)
+                .count();
+        long totalLost = distinctLostTickets + nullTicketLostBets;
+        
+        // Calculate win rate (percentage) - only count resolved bets (won + lost), exclude pending
+        long resolvedBets = totalWins + totalLost;
+        double winRate = resolvedBets > 0 ? (double) totalWins / resolvedBets * 100.0 : 0.0;
         
         // Build UserViewDTO with profile data
         UserViewDTO profileDTO = new UserViewDTO();
@@ -201,6 +219,7 @@ public class UserController {
         profileDTO.setTotalPoints(currentUser.getPoints() != null ? currentUser.getPoints() : 0L);
         profileDTO.setTotalBets(totalBets);
         profileDTO.setTotalWins(totalWins);
+        profileDTO.setTotalLost(totalLost);
         profileDTO.setWinRate(winRate);
         profileDTO.setAbout(currentUser.getAbout()); // Include about field
         

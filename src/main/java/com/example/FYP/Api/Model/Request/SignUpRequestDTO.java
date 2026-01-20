@@ -32,7 +32,8 @@ public class SignUpRequestDTO {
 
     private MultipartFile profilePic;
 
+    @NotBlank(message = "Country is required")
     @Size(max = 100, message = "Country must be at most 100 characters")
-    private String country; // Optional country field
+    private String country; // Required country field
 
 }

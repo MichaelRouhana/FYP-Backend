@@ -95,17 +95,17 @@ public class DashBoardService {
 
     public List<ChartPoint> getTotalBets() {
         List<Bet> bets = betRepository.findAll();
-        return betsPerDate(bets);
+        return betsPerDateDistinctTickets(bets);
     }
 
     public List<ChartPoint> getWonBets() {
         List<Bet> bets = betRepository.findByStatus(BetStatus.WON);
-        return betsPerDate(bets);
+        return betsPerDateDistinctTickets(bets);
     }
 
     public List<ChartPoint> getLostBets() {
         List<Bet> bets = betRepository.findByStatus(BetStatus.LOST);
-        return betsPerDate(bets);
+        return betsPerDateDistinctTickets(bets);
     }
 
 
@@ -154,12 +154,12 @@ public class DashBoardService {
                 .map(user -> {
                     UserViewDTO dto = modelMapper.map(user, UserViewDTO.class);
                     
-                    // MANUAL FIX: Count the bets list since ModelMapper won't do this
-                    if (user.getBets() != null) {
-                        dto.setTotalBets((long) user.getBets().size());
-                    } else {
-                        dto.setTotalBets(0L);
-                    }
+                    // Count distinct tickets (not legs) for this user
+                    long distinctTickets = betRepository.countDistinctTicketsByUserId(user.getId());
+                    long nullTicketBets = user.getBets() != null ? user.getBets().stream()
+                            .filter(bet -> bet.getTicketId() == null || bet.getTicketId().isEmpty())
+                            .count() : 0L;
+                    dto.setTotalBets(distinctTickets + nullTicketBets);
                     
                     // Ensure points are set (map points -> totalPoints)
                     dto.setTotalPoints(user.getPoints() != null ? user.getPoints() : 0L);
@@ -178,12 +178,12 @@ public class DashBoardService {
                     // Ensure points are set (map points -> totalPoints)
                     dto.setTotalPoints(user.getPoints() != null ? user.getPoints() : 0L);
                     
-                    // Also set totalBets for consistency
-                    if (user.getBets() != null) {
-                        dto.setTotalBets((long) user.getBets().size());
-                    } else {
-                        dto.setTotalBets(0L);
-                    }
+                    // Count distinct tickets (not legs) for this user
+                    long distinctTickets = betRepository.countDistinctTicketsByUserId(user.getId());
+                    long nullTicketBets = user.getBets() != null ? user.getBets().stream()
+                            .filter(bet -> bet.getTicketId() == null || bet.getTicketId().isEmpty())
+                            .count() : 0L;
+                    dto.setTotalBets(distinctTickets + nullTicketBets);
                     
                     return dto;
                 })
@@ -199,20 +199,62 @@ public class DashBoardService {
         } else if ("7d".equalsIgnoreCase(timeRange)) {
             threshold = java.time.LocalDateTime.now().minusDays(7);
         } else {
-            // Default "All Time" (or set a very old date)
-            // For All Time, we can use the simpler count() methods
+            // Default "All Time" - count distinct tickets (not legs)
+            // Count distinct ticketIds + bets with NULL ticketId
+            long distinctTickets = betRepository.countDistinctTickets();
+            long nullTicketBets = betRepository.findAll().stream()
+                    .filter(bet -> bet.getTicketId() == null || bet.getTicketId().isEmpty())
+                    .count();
+            long totalBets = distinctTickets + nullTicketBets;
+            
+            long distinctWonTickets = betRepository.countDistinctTicketsByStatus(BetStatus.WON);
+            long nullTicketWonBets = betRepository.findByStatus(BetStatus.WON).stream()
+                    .filter(bet -> bet.getTicketId() == null || bet.getTicketId().isEmpty())
+                    .count();
+            long wonBets = distinctWonTickets + nullTicketWonBets;
+            
+            long distinctLostTickets = betRepository.countDistinctTicketsByStatus(BetStatus.LOST);
+            long nullTicketLostBets = betRepository.findByStatus(BetStatus.LOST).stream()
+                    .filter(bet -> bet.getTicketId() == null || bet.getTicketId().isEmpty())
+                    .count();
+            long lostBets = distinctLostTickets + nullTicketLostBets;
+            
             return DashboardStatsDTO.builder()
-                    .totalBets(betRepository.count())
-                    .wonBets(betRepository.countByStatus(BetStatus.WON))
-                    .lostBets(betRepository.countByStatus(BetStatus.LOST))
+                    .totalBets(totalBets)
+                    .wonBets(wonBets)
+                    .lostBets(lostBets)
                     .build();
         }
 
-        // 2. Return filtered counts
+        // 2. Return filtered counts - count distinct tickets (not legs)
+        long distinctTickets = betRepository.countDistinctTicketsByCreatedDateAfter(threshold);
+        long nullTicketBets = betRepository.findAll().stream()
+                .filter(bet -> bet.getCreatedDate() != null && 
+                        bet.getCreatedDate().isAfter(threshold) &&
+                        (bet.getTicketId() == null || bet.getTicketId().isEmpty()))
+                .count();
+        long totalBets = distinctTickets + nullTicketBets;
+        
+        long distinctWonTickets = betRepository.countDistinctTicketsByStatusAndCreatedDateAfter(BetStatus.WON, threshold);
+        long nullTicketWonBets = betRepository.findByStatus(BetStatus.WON).stream()
+                .filter(bet -> bet.getCreatedDate() != null && 
+                        bet.getCreatedDate().isAfter(threshold) &&
+                        (bet.getTicketId() == null || bet.getTicketId().isEmpty()))
+                .count();
+        long wonBets = distinctWonTickets + nullTicketWonBets;
+        
+        long distinctLostTickets = betRepository.countDistinctTicketsByStatusAndCreatedDateAfter(BetStatus.LOST, threshold);
+        long nullTicketLostBets = betRepository.findByStatus(BetStatus.LOST).stream()
+                .filter(bet -> bet.getCreatedDate() != null && 
+                        bet.getCreatedDate().isAfter(threshold) &&
+                        (bet.getTicketId() == null || bet.getTicketId().isEmpty()))
+                .count();
+        long lostBets = distinctLostTickets + nullTicketLostBets;
+        
         return DashboardStatsDTO.builder()
-                .totalBets(betRepository.countByCreatedDateAfter(threshold))
-                .wonBets(betRepository.countByStatusAndCreatedDateAfter(BetStatus.WON, threshold))
-                .lostBets(betRepository.countByStatusAndCreatedDateAfter(BetStatus.LOST, threshold))
+                .totalBets(totalBets)
+                .wonBets(wonBets)
+                .lostBets(lostBets)
                 .build();
     }
 
@@ -285,6 +327,48 @@ public class DashBoardService {
         
         // Fill in missing days (for bets, we show daily counts, not cumulative)
         return buildDailyChart(dailyBets, 7);
+    }
+
+    /**
+     * Count distinct tickets (not legs) per date
+     */
+    private List<ChartPoint> betsPerDateDistinctTickets(List<Bet> bets) {
+        // Get last 7 days for the chart
+        LocalDateTime startDate = LocalDateTime.now().minusDays(7);
+        
+        // Filter bets from last 7 days
+        List<Bet> recentBets = bets.stream()
+                .filter(b -> b.getCreatedDate() != null && b.getCreatedDate().isAfter(startDate))
+                .collect(Collectors.toList());
+        
+        // Group by date and count distinct tickets (not legs)
+        // For each date, count distinct ticketIds + bets with NULL ticketId
+        Map<LocalDate, Long> dailyTickets = recentBets.stream()
+                .filter(b -> b.getCreatedDate() != null)
+                .collect(Collectors.groupingBy(
+                        b -> b.getCreatedDate().atZone(ZoneId.systemDefault()).toLocalDate(),
+                        Collectors.collectingAndThen(
+                                Collectors.toList(),
+                                betList -> {
+                                    // Count distinct ticketIds
+                                    long distinctTickets = betList.stream()
+                                            .filter(b -> b.getTicketId() != null && !b.getTicketId().isEmpty())
+                                            .map(Bet::getTicketId)
+                                            .distinct()
+                                            .count();
+                                    // Count bets with NULL ticketId (each is a separate ticket)
+                                    long nullTicketBets = betList.stream()
+                                            .filter(b -> b.getTicketId() == null || b.getTicketId().isEmpty())
+                                            .count();
+                                    return distinctTickets + nullTicketBets;
+                                }
+                        )
+                ));
+        
+        log.info("📊 Bet Stats Raw Data (Daily Distinct Tickets): {}", dailyTickets);
+        
+        // Fill in missing days (for bets, we show daily counts, not cumulative)
+        return buildDailyChart(dailyTickets, 7);
     }
     
     /**
