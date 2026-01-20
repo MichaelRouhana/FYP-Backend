@@ -67,5 +67,47 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     // Count users created before a specific date (for cumulative calculations)
     @Query("SELECT COUNT(u) FROM User u WHERE u.createdDate < :startDate")
     long countByCreatedDateBefore(@Param("startDate") java.time.LocalDateTime startDate);
+    
+    // Find active users created after a specific date
+    // Active = users who have placed bets in the last 30 days OR have recent activity (lastModifiedDate)
+    @Query("""
+        SELECT DISTINCT u 
+        FROM User u 
+        LEFT JOIN u.bets b 
+        WHERE u.createdDate >= :startDate 
+        AND (
+            EXISTS (
+                SELECT 1 FROM Bet bet 
+                WHERE bet.user.id = u.id 
+                AND bet.createdDate >= :activityThreshold
+            )
+            OR u.lastModifiedDate >= :activityThreshold
+        )
+        ORDER BY u.createdDate ASC
+    """)
+    List<User> findActiveUsersByCreatedDateAfter(
+        @Param("startDate") java.time.LocalDateTime startDate,
+        @Param("activityThreshold") java.time.LocalDateTime activityThreshold
+    );
+    
+    // Count active users created before a specific date
+    @Query("""
+        SELECT COUNT(DISTINCT u) 
+        FROM User u 
+        LEFT JOIN u.bets b 
+        WHERE u.createdDate < :startDate 
+        AND (
+            EXISTS (
+                SELECT 1 FROM Bet bet 
+                WHERE bet.user.id = u.id 
+                AND bet.createdDate >= :activityThreshold
+            )
+            OR u.lastModifiedDate >= :activityThreshold
+        )
+    """)
+    long countActiveUsersByCreatedDateBefore(
+        @Param("startDate") java.time.LocalDateTime startDate,
+        @Param("activityThreshold") java.time.LocalDateTime activityThreshold
+    );
 
 }

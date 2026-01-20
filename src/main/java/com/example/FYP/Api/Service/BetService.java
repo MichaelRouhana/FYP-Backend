@@ -82,7 +82,7 @@ public class BetService {
                 // If settings don't exist, create with defaults (shouldn't happen, but safety check)
                 settings = MatchSettings.builder()
                         .allowBetting(true)
-                        .allowBettingHT(true)
+                        .allowBettingHT(false)
                         .showMatch(true)
                         .build();
                 fixture.setMatchSettings(settings);

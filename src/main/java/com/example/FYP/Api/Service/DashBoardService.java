@@ -68,19 +68,21 @@ public class DashBoardService {
         // Get last 7 days for the chart
         LocalDateTime startDate = LocalDateTime.now().minusDays(7);
         
-        // For now, treat all users as "active" (TODO: implement actual active filter)
-        // Use optimized query instead of fetching all users
-        List<User> recentUsers = userRepository.findByCreatedDateAfter(startDate);
-        // TODO: Add active filter when available: .filter(User::getActive)
+        // Define "active" as users with activity in the last 30 days
+        // Activity = placed bets OR lastModifiedDate (indicating login/profile update)
+        LocalDateTime activityThreshold = LocalDateTime.now().minusDays(30);
+        
+        // Fetch active users created in the last 7 days
+        List<User> recentActiveUsers = userRepository.findActiveUsersByCreatedDateAfter(startDate, activityThreshold);
         
         // Get total count of active users created BEFORE the start date
-        long activeUsersBeforeStart = userRepository.countByCreatedDateBefore(startDate);
-        // TODO: Add active filter when available
+        long activeUsersBeforeStart = userRepository.countActiveUsersByCreatedDateBefore(startDate, activityThreshold);
         
-        log.info("📊 Active User Stats - Users before start date: {}, Recent users: {}", activeUsersBeforeStart, recentUsers.size());
+        log.info("📊 Active User Stats - Active users before start date: {}, Recent active users: {}", 
+                activeUsersBeforeStart, recentActiveUsers.size());
         
         // Group by date (daily new active users) - handle timezone properly
-        Map<LocalDate, Long> dailyNewActiveUsers = recentUsers.stream()
+        Map<LocalDate, Long> dailyNewActiveUsers = recentActiveUsers.stream()
                 .filter(u -> u.getCreatedDate() != null)
                 .collect(Collectors.groupingBy(
                         u -> u.getCreatedDate().atZone(ZoneId.systemDefault()).toLocalDate(),

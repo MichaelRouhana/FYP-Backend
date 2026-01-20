@@ -82,7 +82,7 @@ public class FixtureSyncService {
                     if (fixture.getMatchSettings() == null) {
                         fixture.setMatchSettings(MatchSettings.builder()
                                 .allowBetting(true)
-                                .allowBettingHT(true)
+                                .allowBettingHT(false)
                                 .showMatch(true)
                                 .build());
                     }
@@ -109,7 +109,7 @@ public class FixtureSyncService {
                             .rawJson(matchNode.toString())
                             .matchSettings(MatchSettings.builder()
                                     .allowBetting(!isFinished) // Disable if already finished
-                                    .allowBettingHT(true) // Default to true (can be changed by admin)
+                                    .allowBettingHT(false) // Default to false (can be changed by admin)
                                     .showMatch(true) // Default to true (can be changed by admin)
                                     .build())
                             .matchPredictionSettings(defaultPredictionSettings())
