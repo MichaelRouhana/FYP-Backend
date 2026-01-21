@@ -1,20 +1,27 @@
 package com.example.FYP.Api.Service;
 
-import com.example.FYP.Api.Entity.AuditLog;
-import com.example.FYP.Api.Entity.Bet;
-import com.example.FYP.Api.Entity.BetStatus;
-import com.example.FYP.Api.Entity.User;
+import com.example.FYP.Api.Entity.*;
 import com.example.FYP.Api.Model.ChartPoint;
+import com.example.FYP.Api.Model.Filter.ActivityLogFilterDTO;
+import com.example.FYP.Api.Model.View.ActivityLogViewDTO;
 import com.example.FYP.Api.Model.View.DashboardStatsDTO;
 import com.example.FYP.Api.Model.View.LogViewDTO;
 import com.example.FYP.Api.Model.View.UserViewDTO;
+import com.example.FYP.Api.Repository.ActivityLogRepository;
 import com.example.FYP.Api.Repository.AuditLogRepository;
 import com.example.FYP.Api.Repository.BetRepository;
 import com.example.FYP.Api.Repository.UserRepository;
+import com.example.FYP.Api.Specification.GenericSpecification;
+import com.example.FYP.Api.Util.PagedResponse;
+import com.nimbusds.openid.connect.sdk.assurance.evidences.Organization;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.modelmapper.ModelMapper;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -35,8 +42,7 @@ public class DashBoardService {
     private final UserRepository userRepository;
     private final BetRepository betRepository;
     private final ModelMapper modelMapper;
-    private final AuditLogRepository auditLogRepository;
-
+    private final ActivityLogRepository activityLogRepository;
 
     public List<ChartPoint> totalUsers() {
         LocalDateTime startDate = LocalDateTime.now().minusDays(7);
@@ -99,26 +105,17 @@ public class DashBoardService {
     }
 
 
-    public List<LogViewDTO> getLogs() {
-        return auditLogRepository.findAll(Sort.by(Sort.Direction.DESC, "performedAt")).stream()
-                .map(log -> {
-                    LogViewDTO dto = new LogViewDTO();
-                    dto.setId(log.getId());
-                    dto.setAction(log.getAction());
-                    
-                    String details = String.format("%s (ID: %s)", log.getEntityName(), log.getEntityId());
-                    if (log.getOldData() != null || log.getNewData() != null) {
-                        details += " - " + (log.getNewData() != null ? log.getNewData() : log.getOldData());
-                    }
-                    dto.setDetails(details);
-                    
-                    dto.setTimestamp(log.getPerformedAt());
-                    
-                    dto.setUsername(log.getPerformedBy() != null ? log.getPerformedBy() : "System");
-                    
-                    return dto;
-                })
-                .collect(Collectors.toList());
+    public PagedResponse<ActivityLogViewDTO> getLogs(Pageable pageable, ActivityLogFilterDTO filter) {
+
+        Specification<ActivityLog> specification = Specification.where(
+                GenericSpecification.<ActivityLog>filterByFields(filter)
+        );
+
+        Page<ActivityLog> purchaseOrderPage = activityLogRepository.findAll(specification, pageable);
+
+        Page<ActivityLogViewDTO> accountResponsePage = purchaseOrderPage.map(account -> modelMapper.map(account, ActivityLogViewDTO.class));
+
+        return PagedResponse.fromPage(accountResponsePage);
     }
 
 

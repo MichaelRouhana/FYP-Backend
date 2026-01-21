@@ -2,13 +2,17 @@ package com.example.FYP.Api.Controller;
 
 
 import com.example.FYP.Api.Loader.Annotation.Feature;
+import com.example.FYP.Api.Model.Filter.ActivityLogFilterDTO;
+import com.example.FYP.Api.Model.View.ActivityLogViewDTO;
 import com.example.FYP.Api.Model.View.LogViewDTO;
 import com.example.FYP.Api.Service.DashBoardService;
+import com.example.FYP.Api.Util.PagedResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -83,8 +87,8 @@ public class  DashBoardController {
 
             })
     @GetMapping("/logs")
-    public ResponseEntity<List<LogViewDTO>> getLogs() {
-        return ResponseEntity.ok(dashboardService.getLogs());
+    public ResponseEntity<PagedResponse<ActivityLogViewDTO>> getLogs(Pageable pageable, ActivityLogFilterDTO filter) {
+        return ResponseEntity.ok(dashboardService.getLogs(pageable, filter));
     }
 
 

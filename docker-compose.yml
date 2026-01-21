@@ -11,7 +11,6 @@ services:
       - "8080:8080"
     volumes:
       - ./src/main/resources/application.properties:/app/config/application.properties
-      - ./src/main/resources/client_secret_773653723597-i35sq1vmqe5kqveg7r9851gg7psmo83g.apps.googleusercontent.com.json:/app/config/client_secret_773653723597-i35sq1vmqe5kqveg7r9851gg7psmo83g.apps.googleusercontent.com.json
     environment:
       SPRING_CONFIG_LOCATION: "file:/app/config/application.properties"
       SPRING_DATASOURCE_URL: "jdbc:mysql://mysql-db:3306/jwt_auth_db?allowPublicKeyRetrieval=true&useSSL=false&createDatabaseIfNotExist=true"
