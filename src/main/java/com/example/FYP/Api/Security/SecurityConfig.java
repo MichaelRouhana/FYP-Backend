@@ -3,7 +3,6 @@ package com.example.FYP.Api.Security;
 import com.example.FYP.Api.Filter.JwtAuthFilter;
 import com.example.FYP.Api.Filter.RateLimitingFilter;
 import com.example.FYP.Api.Interceptor.RoleInterceptor;
-import com.example.FYP.Api.Interceptor.SubscriptionInterceptor;
 import com.example.FYP.Api.Service.UserDetailsServiceImpl;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,14 +37,12 @@ public class SecurityConfig implements WebMvcConfigurer {
     private final RateLimitingFilter rateLimitingFilter;
     private final UserDetailsServiceImpl userDetailsService;
     private final RoleInterceptor roleInterceptor;
-    private final SubscriptionInterceptor subscriptionInterceptor;
 
-    public SecurityConfig(JwtAuthFilter jwtAuthFilter, RateLimitingFilter rateLimitingFilter, UserDetailsServiceImpl userDetailsService, RoleInterceptor roleInterceptor, SubscriptionInterceptor subscriptionInterceptor) {
+    public SecurityConfig(JwtAuthFilter jwtAuthFilter, RateLimitingFilter rateLimitingFilter, UserDetailsServiceImpl userDetailsService, RoleInterceptor roleInterceptor) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.rateLimitingFilter = rateLimitingFilter;
         this.userDetailsService = userDetailsService;
         this.roleInterceptor = roleInterceptor;
-        this.subscriptionInterceptor = subscriptionInterceptor;
     }
 
     @Bean

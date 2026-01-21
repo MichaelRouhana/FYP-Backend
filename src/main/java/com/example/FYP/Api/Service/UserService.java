@@ -2,11 +2,9 @@ package com.example.FYP.Api.Service;
 
 import com.example.FYP.Api.Entity.Address;
 import com.example.FYP.Api.Entity.BetStatus;
-import com.example.FYP.Api.Entity.Organization;
 import com.example.FYP.Api.Entity.User;
 import com.example.FYP.Api.Entity.UserRole;
 import com.example.FYP.Api.Entity.VerificationToken;
-import com.example.FYP.Api.Exception.ApiRequestException;
 import com.example.FYP.Api.Exception.NotVerifiedException;
 import com.example.FYP.Api.Exception.UserAlreadyExistException;
 import com.example.FYP.Api.Exception.UserNotFoundException;
@@ -14,31 +12,23 @@ import com.example.FYP.Api.Mapper.UserMapper;
 import com.example.FYP.Api.Messaging.Model.EmailVerificationMessage;
 import com.example.FYP.Api.Messaging.RabbitMqProducer;
 import com.example.FYP.Api.Model.Constant.Role;
-import com.example.FYP.Api.Model.Filter.UserFilterDTO;
 import com.example.FYP.Api.Model.Request.LoginRequestDTO;
 import com.example.FYP.Api.Model.Request.SignUpRequestDTO;
 import com.example.FYP.Api.Model.Response.JwtResponseDTO;
 import com.example.FYP.Api.Model.View.CommunityViewDTO;
 import com.example.FYP.Api.Model.View.UserViewDTO;
 import com.example.FYP.Api.Repository.BetRepository;
-import com.example.FYP.Api.Repository.OrganizationRepository;
 import com.example.FYP.Api.Repository.RoleRepository;
 import com.example.FYP.Api.Repository.UserRepository;
 import com.example.FYP.Api.Repository.VerificationTokenRepository;
 import com.example.FYP.Api.Security.SecurityContext;
-import com.example.FYP.Api.Specification.GenericSpecification;
 import com.example.FYP.Api.Util.PagedResponse;
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import jakarta.persistence.EntityNotFoundException;
-import jakarta.persistence.criteria.Join;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -64,11 +54,9 @@ public class UserService {
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final RoleRepository roleRepository;
-    private final OrganizationRepository organizationRepository;
     private final SecurityContext securityContext;
     private final RabbitMqProducer rabbitMqProducer;
     private final VerificationTokenRepository verificationTokenRepository;
-    private final GoogleIdTokenVerifier googleIdTokenVerifier;
     private final UserMapper userMapper;
     private final ModelMapper modelMapper;
 
@@ -187,77 +175,8 @@ public class UserService {
         }
     }
 
-    public JwtResponseDTO loginWithGoogle(String googleToken) {
-        try {
-            GoogleIdToken idToken = googleIdTokenVerifier.verify(googleToken);
-            if (idToken != null) {
-                GoogleIdToken.Payload payload = idToken.getPayload();
-
-                String email = payload.getEmail();
-                String username = (String) payload.get("name");
-                String pictureUrl = (String) payload.get("picture");
-
-                Optional<User> userOptional = userRepository.findByEmail(email);
-                User user = userOptional.orElseGet(() -> {
-                    User newUser = User.builder()
-                            .email(email)
-                            .username(username)
-                            .pfp(pictureUrl)
-                            .isVerified(true)
-                            .roles(Collections.singleton(roleRepository.findById(1L)
-                                    .orElseThrow(() -> new EntityNotFoundException("Role not found"))))
-                            .build();
-                    return userRepository.save(newUser);
-                });
-
-                return JwtResponseDTO.builder()
-                        .accessToken(jwtService.GenerateToken(email))
-                        .email(user.getEmail())
-                        .roles(user.getRoles().stream().map((role) -> role.getRole().name()).toList())
-                        .username(user.getUsername())
-                        .pfp(user.getPfp())
-                        .build();
-            } else {
-                throw new ApiRequestException("Invalid Google ID token");
-            }
-        } catch (Exception e) {
-            throw new ApiRequestException("Google authentication failed");
-        }
-    }
-
-    public PagedResponse<UserViewDTO> getOrganizationUsers(String organizationUUID, Pageable pageable, UserFilterDTO filter) {
-        Organization organization = organizationRepository.findByUuid(organizationUUID)
-                .orElseThrow(() -> new EntityNotFoundException("Organization not found"));
-
-        Specification<User> specification = Specification.where(
-                GenericSpecification.<User>filterByFields(filter)
-        ).and((root, query, criteriaBuilder) -> {
-            Join<User, Organization> organizationJoin = root.join("organizations");
-            return criteriaBuilder.equal(organizationJoin.get("id"), organization.getId());
-        });
 
 
-        Page<UserViewDTO> userPage = userRepository.findAll(specification, pageable).map((e) -> userMapper.toUserViewDTO(e, organization.getId()));
-
-        return PagedResponse.fromPage(userPage);
-    }
-
-
-    public void hasRole(String organizationUUID, List<String> roleNames) {
-        User user = securityContext.getCurrentUser();
-
-        Organization organization = organizationRepository.findByUuid(organizationUUID)
-                .orElseThrow(() -> new EntityNotFoundException("Organization not found"));
-
-        boolean result = user.getCommunityRoles().stream()
-                .filter(role -> role.getCommunity().getId() == organization.getId())
-                .anyMatch(role -> roleNames.contains(role.getRole().name()));
-
-        System.out.println("result : " + result);
-        if (!result) {
-            throw new AccessDeniedException("Access denied");
-        }
-    }
 
     public String verify(String token) {
         VerificationToken verificationToken = verificationTokenRepository.findByToken(token);

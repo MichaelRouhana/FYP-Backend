@@ -144,31 +144,6 @@ public class UserController {
     }
 
 
-    @Operation(summary = "retrieve users",
-            parameters = {
-                    @Parameter(name = "Authorization",
-                            description = "Bearer token for authentication",
-                            required = true,
-                            in = ParameterIn.HEADER)
-            },
-            responses = {
-                    @ApiResponse(description = "Users retrieved Successfully!", responseCode = "200",
-                            content = @Content(mediaType = "application/json",
-                                    schema = @Schema(implementation = User.class)))
-            })
-    @GetMapping("/organization/users")
-    public ResponseEntity<PagedResponse<UserViewDTO>> getOrganizationUsers(@RequestParam @NotBlank String organizationUUID,
-                                                                           Pageable pageable,
-                                                                           UserFilterDTO filter) {
-        return ResponseEntity.ok(userService.getOrganizationUsers(organizationUUID, pageable, filter));
-    }
-
-
-
-    @GetMapping("/communities")
-    public ResponseEntity<List<CommunityViewDTO>> getOrganizationUsers() {
-        return ResponseEntity.ok(userService.getCommunities());
-    }
 
     @Operation(summary = "Get user profile with statistics",
             parameters = {
@@ -351,17 +326,6 @@ public class UserController {
 
 
 
-    @PostMapping("/login/google")
-    public ResponseEntity<JwtResponseDTO> loginWithGoogle(@RequestBody Map<String, String> requestBody) {
-        String googleToken = requestBody.get("token");
-
-        if (googleToken == null || googleToken.isEmpty()) {
-            throw new ApiRequestException("Google token is required");
-        }
-
-        JwtResponseDTO jwtResponse = userService.loginWithGoogle(googleToken);
-        return ResponseEntity.ok(jwtResponse);
-    }
 
     @Operation(summary = "Get all users with optional search",
             parameters = {
