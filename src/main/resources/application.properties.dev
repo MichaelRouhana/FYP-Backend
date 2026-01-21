@@ -49,3 +49,4 @@ spring.profiles.active=light
 football.api.key=
 spring.mail.username=
 spring.mail.password=
+backend.domain=

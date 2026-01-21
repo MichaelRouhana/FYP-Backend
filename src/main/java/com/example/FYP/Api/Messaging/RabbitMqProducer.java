@@ -20,27 +20,10 @@ public class RabbitMqProducer {
     private final RabbitTemplate rabbitTemplate;
     private final MailService mailService;
 
-    @CircuitBreaker(name = "rabbitmqService", fallbackMethod = "inviteFallBack")
-    public void sendInvite(String queueName, InvitationMessage message) {
-        rabbitTemplate.convertAndSend(queueName, message);
-    }
-
-
     @CircuitBreaker(name = "rabbitmqService", fallbackMethod = "verificationFallBack")
     public void sendVerification(String queueName, EmailVerificationMessage message) {
         rabbitTemplate.convertAndSend(queueName, message);
     }
-
-
-    public void inviteFallBack(String queueName, InvitationMessage message, Throwable t) {
-        try {
-            System.out.println(message.getEmail());
-            mailService.sendInviteEmail(message.getEmail(), "Invitation", message.getToken());
-        } catch (MessagingException e) {
-            throw new ApiRequestException("RabbitMQ is down, retry later");
-        }
-    }
-
 
     public void verificationFallBack(String queueName, EmailVerificationMessage message, Throwable t) {
         try {

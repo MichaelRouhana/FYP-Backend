@@ -16,19 +16,6 @@ public class RabbitMqConsumer {
 
     private final MailService mailService;
 
-    @RabbitListener(queues = "inviteQueue")
-    public void receiveInvite(InvitationMessage message) {
-
-        log.info("Sending Invite to : " + message.getEmail());
-
-        try {
-            mailService.sendInviteEmail(message.getEmail(), "You're Invited!", message.getToken());
-        } catch (jakarta.mail.MessagingException e) {
-            e.printStackTrace();
-        }
-        log.info("Invitation email sent successfully");
-    }
-
 
     @RabbitListener(queues = "verificationQueue")
     public void receiveVerification(EmailVerificationMessage message) {

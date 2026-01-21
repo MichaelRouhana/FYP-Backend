@@ -2,6 +2,7 @@ package com.example.FYP.Api.Service;
 
 import jakarta.mail.internet.MimeMessage;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -18,28 +19,15 @@ public class MailService {
     @Autowired
     private SpringTemplateEngine templateEngine;
 
-    public void sendInviteEmail(String to, String subject, String token) throws jakarta.mail.MessagingException {
-        String link = "https://api.erpcloudapp.com/api/v1/organizations/invitation/accept/" + token;
+    @Value("${backend.domain}")
+    private String domain;
 
-        Context context = new Context();
-        context.setVariable("acceptInvitationUrl", link);
-
-        String emailContent = templateEngine.process("invitationEmail", context);
-
-        MimeMessage message = mailSender.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(message, true);
-
-        helper.setFrom("charbelbouabdo4@gmail.com");
-        helper.setTo(to);
-        helper.setSubject(subject);
-        helper.setText(emailContent, true);
-
-        mailSender.send(message);
-    }
+    @Value("${spring.mail.username}")
+    private String username;
 
 
     public void sendVerificationEmail(String to, String subject, String token) throws jakarta.mail.MessagingException {
-        String link = "https://api.erpcloudapp.com/api/v1/users/verify?token=" + token;
+        String link = domain + "/api/v1/users/verify?token=" + token;
 
         Context context = new Context();
         context.setVariable("acceptInvitationUrl", link);
@@ -49,7 +37,7 @@ public class MailService {
         MimeMessage message = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(message, true);
 
-        helper.setFrom("charbelbouabdo4@gmail.com");
+        helper.setFrom(username);
         helper.setTo(to);
         helper.setSubject(subject);
         helper.setText(emailContent, true);

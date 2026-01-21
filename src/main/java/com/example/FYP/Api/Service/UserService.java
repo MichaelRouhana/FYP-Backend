@@ -141,7 +141,7 @@ public class UserService {
                 .username(signUpRequestDTO.getUsername())
                 .pfp("/dummy/url")
                 .roles(roles)
-                .isVerified(true)
+                .isVerified(false)
                 .communityRoles(new HashSet<>());
         
         if (country != null && !country.trim().isEmpty()) {
