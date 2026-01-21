@@ -102,6 +102,13 @@ spring.datasource.password=root
 
 ---
 
+
+### Url FallBack
+this url is used when the user confirm his sign up and needs to be redirected
+```properties
+backend.domain=
+```
+
 ## Spring Profiles
 
 Choose the profile depending on logging requirements:
