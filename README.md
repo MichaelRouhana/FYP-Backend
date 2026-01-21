@@ -1,4 +1,4 @@
-# Project – Local Development Setup
+# Project – Production Setup
 
 This repository provides a **Docker-based local development environment** for the backend application and its supporting services.
 
@@ -120,8 +120,3 @@ spring.profiles.active=light
 
 ---
 
-## Notes
-
-* Inside Docker, **never use `localhost`** — always use service names (e.g. `mysql`, `rabbitmq`).
-* This setup is intended for **development only**.
-* Credentials and security settings must be changed for production
