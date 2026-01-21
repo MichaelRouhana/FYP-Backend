@@ -20,7 +20,7 @@ public class MatchSettings {
 
     @Column(nullable = false)
     @Builder.Default
-    private Boolean allowBettingHT = true;
+    private Boolean allowBettingHT = false;
 
     @Column(nullable = false)
     @Builder.Default

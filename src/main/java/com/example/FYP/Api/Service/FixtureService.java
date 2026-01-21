@@ -46,14 +46,12 @@ public class FixtureService {
     private final SecurityContext securityContext;
 
     public List<FixtureViewDTO> getAllFixtures() {
-        // Check if current user is admin
         boolean isAdmin = false;
         try {
             User currentUser = securityContext.getCurrentUser();
             isAdmin = currentUser.getRoles().stream()
                     .anyMatch(role -> role.getRole() == Role.ADMIN);
         } catch (Exception e) {
-            // If user is not authenticated or not found, treat as non-admin
             log.debug("User not authenticated or not found, treating as non-admin");
         }
         
@@ -61,15 +59,12 @@ public class FixtureService {
         
         return fixtureRepository.findAll().stream()
                 .filter(fixture -> {
-                    // If admin, show all fixtures (including hidden ones)
                     if (finalIsAdmin) {
                         return true;
                     }
                     
-                    // If non-admin or guest, only show fixtures where showMatch == true
                     MatchSettings settings = fixture.getMatchSettings();
                     if (settings == null) {
-                        // If no settings exist, default to showing (for backward compatibility)
                         return true;
                     }
                     return Boolean.TRUE.equals(settings.getShowMatch());
@@ -82,14 +77,12 @@ public class FixtureService {
     public List<FixtureViewDTO> getPublicFixtures() {
         log.info("Fetching public fixtures from database (cache miss)");
         
-        // Check if current user is admin
         boolean isAdmin = false;
         try {
             User currentUser = securityContext.getCurrentUser();
             isAdmin = currentUser.getRoles().stream()
                     .anyMatch(role -> role.getRole() == Role.ADMIN);
         } catch (Exception e) {
-            // If user is not authenticated or not found, treat as non-admin
             log.debug("User not authenticated or not found in getPublicFixtures, treating as non-admin");
         }
         
@@ -99,54 +92,32 @@ public class FixtureService {
         
         return fixtureRepository.findAll().stream()
                 .filter(fixture -> {
-                    // If admin, show ALL matches (bypass all settings filters)
                     if (finalIsAdmin) {
-                        return true; // Admins see everything
+                        return true;
                     }
                     
-                    // For non-admins: Must have MatchSettings and showMatch must be true
                     if (fixture.getMatchSettings() == null || 
                         !Boolean.TRUE.equals(fixture.getMatchSettings().getShowMatch())) {
                         return false;
                     }
                     
-                    // Check if match is finished
-                    boolean isFinished = false;
-                    try {
-                        JsonNode rawJson = objectMapper.readTree(fixture.getRawJson());
-                        String statusShort = rawJson.path("fixture").path("status").path("short").asText();
-                        isFinished = Set.of("FT", "AET", "PEN", "WO", "ABD", "AWD").contains(statusShort);
-                    } catch (Exception e) {
-                        log.warn("Failed to parse fixture status: {}", e.getMessage());
-                    }
-                    
-                    // For finished matches: only require showMatch == true
-                    // For upcoming/live matches: require both showMatch == true AND allowBetting == true
-                    if (isFinished) {
-                        return true; // Show finished matches if showMatch is true
-                    } else {
-                        return Boolean.TRUE.equals(fixture.getMatchSettings().getAllowBetting());
-                    }
+                    return true;
                 })
-                // Filter by date - only show matches from today onwards (up to 7 days)
                 .filter(fixture -> {
                     try {
                         JsonNode rawJson = objectMapper.readTree(fixture.getRawJson());
                         String dateStr = rawJson.path("fixture").path("date").asText();
                         if (dateStr == null || dateStr.isEmpty()) return false;
                         
-                        // Parse ISO date
                         Instant instant = Instant.parse(dateStr);
                         LocalDate fixtureDate = instant.atZone(ZoneId.systemDefault()).toLocalDate();
                         
-                        // Include fixtures from yesterday (for recently finished) up to 7 days ahead
                         return !fixtureDate.isBefore(today.minusDays(1)) && !fixtureDate.isAfter(weekFromNow);
                     } catch (Exception e) {
                         log.warn("Failed to parse fixture date: {}", e.getMessage());
                         return false;
                     }
                 })
-                // Sort by date (earliest first)
                 .sorted((f1, f2) -> {
                     try {
                         JsonNode json1 = objectMapper.readTree(f1.getRawJson());
@@ -170,7 +141,6 @@ public class FixtureService {
             fixture.setMatchSettings(MatchSettings.builder().build());
         }
 
-        // Map only non-null fields
         modelMapper.getConfiguration().setSkipNullEnabled(true);
         modelMapper.map(patchDTO, fixture.getMatchSettings());
 
@@ -185,7 +155,6 @@ public class FixtureService {
             fixture.setMatchPredictionSettings(MatchPredictionSettings.builder().build());
         }
 
-        // Map only non-null fields
         modelMapper.getConfiguration().setSkipNullEnabled(true);
         modelMapper.map(patchDTO, fixture.getMatchPredictionSettings());
 
@@ -196,12 +165,27 @@ public class FixtureService {
         Fixture fixture = fixtureRepository.findById(fixtureId)
                 .orElseThrow(() -> new EntityNotFoundException("Fixture not found: " + fixtureId));
 
-        MatchSettings matchSettings = fixture.getMatchSettings() != null 
-                ? fixture.getMatchSettings() 
-                : MatchSettings.builder().build();
-
-        // Map entity to DTO
-        return modelMapper.map(matchSettings, FixtureViewDTO.MatchSettingsView.class);
+        MatchSettings matchSettings = fixture.getMatchSettings();
+        
+        FixtureViewDTO.MatchSettingsView dto;
+        
+        if (matchSettings != null) {
+            dto = modelMapper.map(matchSettings, FixtureViewDTO.MatchSettingsView.class);
+        } else {
+            dto = new FixtureViewDTO.MatchSettingsView();
+        }
+        
+        if (dto.getAllowBettingHT() == null) {
+            dto.setAllowBettingHT(false);
+        }
+        if (dto.getShowMatch() == null) {
+            dto.setShowMatch(true);
+        }
+        if (dto.getAllowBetting() == null) {
+            dto.setAllowBetting(true);
+        }
+        
+        return dto;
     }
 
     public FixtureViewDTO.MatchPredictionSettingsView getMatchPredictionSettings(Long fixtureId) {
@@ -212,7 +196,6 @@ public class FixtureService {
                 ? fixture.getMatchPredictionSettings()
                 : MatchPredictionSettings.builder().build();
 
-        // Map entity to DTO
         return modelMapper.map(matchPredictionSettings, FixtureViewDTO.MatchPredictionSettingsView.class);
     }
 
@@ -220,7 +203,6 @@ public class FixtureService {
         Fixture fixture = fixtureRepository.findById(fixtureId)
                 .orElseThrow(() -> new EntityNotFoundException("Fixture not found: " + fixtureId));
 
-        // Group bets by user and calculate total wagered
         Map<User, Double> userTotalWagered = fixture.getBetsSet().stream()
                 .filter(bet -> bet.getUser() != null && bet.getStake() != null)
                 .collect(Collectors.groupingBy(
@@ -228,7 +210,6 @@ public class FixtureService {
                         Collectors.summingDouble(Bet::getStake)
                 ));
 
-        // Convert to DTOs
         return userTotalWagered.entrySet().stream()
                 .map(entry -> {
                     User user = entry.getKey();
@@ -242,7 +223,7 @@ public class FixtureService {
                     
                     return dto;
                 })
-                .sorted((a, b) -> Double.compare(b.getTotalWagered(), a.getTotalWagered())) // Sort by total wagered descending
+                .sorted((a, b) -> Double.compare(b.getTotalWagered(), a.getTotalWagered()))
                 .collect(Collectors.toList());
     }
 }

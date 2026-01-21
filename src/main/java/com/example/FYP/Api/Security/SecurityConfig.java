@@ -54,9 +54,7 @@ public class SecurityConfig implements WebMvcConfigurer {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/users/login", "/users/signup", "/users/verify", "/users/login/google").permitAll()
-                        // WebSocket endpoints - must be permitted for upgrade request
                         .requestMatchers("/ws", "/ws/**", "/ws/sockjs/**", "/api/v1/ws/**").permitAll()
-                        // Static file uploads - permit access to uploaded files
                         .requestMatchers("/uploads/**", "/api/v1/uploads/**").permitAll()
                         .requestMatchers("/txn/**",
                                 "/bets/**",
@@ -80,7 +78,7 @@ public class SecurityConfig implements WebMvcConfigurer {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://127.0.0.1:5500"));
+        configuration.setAllowedOrigins(Arrays.asList("http://127.0.0.1:5500", "http://localhost:8081"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Cache-Control", "Content-Type"));
         configuration.setExposedHeaders(List.of("Authorization"));

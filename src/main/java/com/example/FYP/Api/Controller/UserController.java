@@ -186,14 +186,27 @@ public class UserController {
     public ResponseEntity<UserViewDTO> getProfile() {
         User currentUser = securityContext.getCurrentUser();
         
-        // Calculate betting statistics
-        long totalBets = betRepository.countByUserId(currentUser.getId());
-        long totalWins = betRepository.countByUserIdAndStatus(currentUser.getId(), BetStatus.WON);
+        long distinctTickets = betRepository.countDistinctTicketsByUserId(currentUser.getId());
+        long nullTicketBets = betRepository.findByUserId(currentUser.getId()).stream()
+                .filter(bet -> bet.getTicketId() == null || bet.getTicketId().isEmpty())
+                .count();
+        long totalBets = distinctTickets + nullTicketBets;
         
-        // Calculate win rate (percentage)
-        double winRate = totalBets > 0 ? (double) totalWins / totalBets * 100.0 : 0.0;
+        long distinctWonTickets = betRepository.countDistinctTicketsByUserIdAndStatus(currentUser.getId(), BetStatus.WON);
+        long nullTicketWonBets = betRepository.findByUserId(currentUser.getId()).stream()
+                .filter(bet -> (bet.getTicketId() == null || bet.getTicketId().isEmpty()) && bet.getStatus() == BetStatus.WON)
+                .count();
+        long totalWins = distinctWonTickets + nullTicketWonBets;
         
-        // Build UserViewDTO with profile data
+        long distinctLostTickets = betRepository.countDistinctTicketsByUserIdAndStatus(currentUser.getId(), BetStatus.LOST);
+        long nullTicketLostBets = betRepository.findByUserId(currentUser.getId()).stream()
+                .filter(bet -> (bet.getTicketId() == null || bet.getTicketId().isEmpty()) && bet.getStatus() == BetStatus.LOST)
+                .count();
+        long totalLost = distinctLostTickets + nullTicketLostBets;
+        
+        long resolvedBets = totalWins + totalLost;
+        double winRate = resolvedBets > 0 ? (double) totalWins / resolvedBets * 100.0 : 0.0;
+        
         UserViewDTO profileDTO = new UserViewDTO();
         profileDTO.setUsername(currentUser.getUsername());
         profileDTO.setEmail(currentUser.getEmail());
@@ -201,10 +214,10 @@ public class UserController {
         profileDTO.setTotalPoints(currentUser.getPoints() != null ? currentUser.getPoints() : 0L);
         profileDTO.setTotalBets(totalBets);
         profileDTO.setTotalWins(totalWins);
+        profileDTO.setTotalLost(totalLost);
         profileDTO.setWinRate(winRate);
-        profileDTO.setAbout(currentUser.getAbout()); // Include about field
+        profileDTO.setAbout(currentUser.getAbout());
         
-        // Get country from Address
         String country = null;
         if (currentUser.getAddress() != null && currentUser.getAddress().getCountry() != null) {
             country = currentUser.getAddress().getCountry();
@@ -254,12 +267,10 @@ public class UserController {
     public ResponseEntity<Void> changePassword(@RequestBody @Valid ChangePasswordDTO changePasswordDTO) {
         User currentUser = securityContext.getCurrentUser();
         
-        // Validate old password
         if (!passwordEncoder.matches(changePasswordDTO.getOldPassword(), currentUser.getPassword())) {
             throw new ApiRequestException("Invalid old password");
         }
         
-        // Encode and save new password
         String encodedNewPassword = passwordEncoder.encode(changePasswordDTO.getNewPassword());
         currentUser.setPassword(encodedNewPassword);
         userRepository.save(currentUser);
@@ -292,7 +303,6 @@ public class UserController {
             throw new ApiRequestException("File is empty");
         }
         
-        // Create uploads directory if it doesn't exist
         String uploadDir = "uploads/avatars";
         Path uploadPath = Paths.get(uploadDir);
         if (!Files.exists(uploadPath)) {
@@ -300,12 +310,10 @@ public class UserController {
             System.out.println("📁 Created upload directory: " + uploadPath.toAbsolutePath());
         }
         
-        // Generate unique filename
         String fileExtension = "";
         if (file.getOriginalFilename() != null && file.getOriginalFilename().contains(".")) {
             fileExtension = file.getOriginalFilename().substring(file.getOriginalFilename().lastIndexOf('.'));
         } else {
-            // Determine extension from content type
             if (file.getContentType() != null) {
                 if (file.getContentType().contains("jpeg") || file.getContentType().contains("jpg")) {
                     fileExtension = ".jpg";
@@ -322,21 +330,17 @@ public class UserController {
         String fileName = "avatar_" + currentUser.getId() + "_" + System.currentTimeMillis() + fileExtension;
         Path filePath = uploadPath.resolve(fileName);
         
-        // Save the file
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
         System.out.println("💾 File saved to: " + filePath.toAbsolutePath());
         
-        // Construct the full URL from the request
-        String scheme = request.getScheme(); // http or https
-        String serverName = request.getServerName(); // IP or hostname
+        String scheme = request.getScheme();
+        String serverName = request.getServerName();
         int serverPort = request.getServerPort();
-        String contextPath = request.getContextPath(); // /api/v1
+        String contextPath = request.getContextPath();
         
-        // Build the full URL
         String baseUrl = scheme + "://" + serverName + (serverPort != 80 && serverPort != 443 ? ":" + serverPort : "") + contextPath;
         String avatarUrl = baseUrl + "/uploads/avatars/" + fileName;
         
-        // Update user with the new avatar URL
         currentUser.setPfp(avatarUrl);
         userRepository.save(currentUser);
         

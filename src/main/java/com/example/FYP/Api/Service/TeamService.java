@@ -53,17 +53,15 @@ public class TeamService {
             JsonNode venue = response.get(0).path("venue");
             JsonNode coach = response.get(0).path("coach");
 
-            // Fetch coach details from dedicated coach endpoint
             CoachDTO coachDTO = footBallService.getCoachByTeamId(teamId);
             
-            // Use coach from dedicated endpoint if available, otherwise fallback to team data
             String coachName = coachDTO != null && coachDTO.getName() != null && !coachDTO.getName().isEmpty()
                     ? coachDTO.getName()
                     : coach.path("name").asText("");
             
             String coachImageUrl = coachDTO != null && coachDTO.getPhotoUrl() != null && !coachDTO.getPhotoUrl().isEmpty()
                     ? coachDTO.getPhotoUrl()
-                    : null; // null means no image, frontend will show icon fallback
+                    : null;
 
             return TeamHeaderDTO.builder()
                     .name(teamData.path("name").asText(""))
@@ -86,11 +84,10 @@ public class TeamService {
      */
     public FixtureViewDTO getLastMatch(Long teamId) {
         try {
-            // Find last finished match where team is either home or away
             List<Fixture> fixtures = fixtureRepository.findLastFinishedMatchByTeamId(teamId);
             
             if (fixtures.isEmpty()) {
-                return null; // No finished matches found
+                return null;
             }
 
             Fixture lastFixture = fixtures.get(0);
@@ -114,7 +111,6 @@ public class TeamService {
                 return Collections.emptyList();
             }
 
-            // API-Sports returns: response[0].players[] array
             JsonNode players = response.get(0).path("players");
             if (!players.isArray() || players.size() == 0) {
                 return Collections.emptyList();
@@ -139,7 +135,6 @@ public class TeamService {
                 squad.add(member);
             }
 
-            // Sort by position: GK, DEF, MID, FWD
             return squad.stream()
                     .sorted(Comparator.comparing(m -> getPositionOrder(m.getPosition())))
                     .collect(Collectors.toList());
@@ -158,125 +153,62 @@ public class TeamService {
      */
     public TeamStatsDTO getTeamStatistics(Long teamId, Long leagueId, Integer season) {
         try {
-            // Use current season if not provided
             if (season == null) {
-                season = java.time.Year.now().getValue();
+                season = 2025;
             }
             
-            // Fetch team statistics from external API
             String jsonResponse = fetchFromApi("teams/statistics", 
                     Map.of("team", teamId.toString(), "league", leagueId.toString(), "season", season.toString()));
             
-            // Log the raw response for debugging
             log.info("API Response for team {} league {} season {}: {}", teamId, leagueId, season, jsonResponse);
             
             JsonNode root = objectMapper.readTree(jsonResponse);
             JsonNode response = root.path("response");
             
-            // Check for API errors
             if (root.has("errors") && root.path("errors").size() > 0) {
                 log.error("API returned errors: {}", root.path("errors"));
                 return buildDefaultStats();
             }
             
-            // API-Football /teams/statistics returns response as an OBJECT, not an array
             if (response.isMissingNode() || response.isNull()) {
                 log.warn("Missing response for team {} league {} season {}", teamId, leagueId, season);
                 return buildDefaultStats();
             }
-            
-            // The response is already the statistics object (not an array)
+
             JsonNode statsData = response;
             
-            // Build Summary from fixtures
-            // API-Football returns: fixtures.played.total, fixtures.wins.total, etc.
             JsonNode fixtures = statsData.path("fixtures");
             TeamStatsDTO.Summary summary = TeamStatsDTO.Summary.builder()
                     .played(safeInt(fixtures.path("played").path("total")))
                     .wins(safeInt(fixtures.path("wins").path("total")))
                     .draws(safeInt(fixtures.path("draws").path("total")))
                     .loses(safeInt(fixtures.path("loses").path("total")))
-                    .form(safeString(statsData.path("form"))) // form is at root level
+                    .form(safeString(statsData.path("form")))
                     .build();
 
-            // Build Attacking from goals, penalty, and shots
             JsonNode goals = statsData.path("goals");
             JsonNode penalty = statsData.path("penalty");
-            JsonNode shots = statsData.path("shots");
             
             TeamStatsDTO.Attacking attacking = TeamStatsDTO.Attacking.builder()
-                    .goalsScored(safeInt(goals.path("for").path("total").path("total"))) // goals.for.total.total
-                    .penaltiesScored(safeInt(penalty.path("scored").path("total"))) // penalty.scored.total
-                    .penaltiesMissed(safeInt(penalty.path("missed").path("total"))) // penalty.missed.total
-                    .shotsOnGoal(safeInt(shots.path("on")))
-                    .shotsOffGoal(safeInt(shots.path("off")))
-                    .totalShots(safeInt(shots.path("total")))
+                    .goalsScored(safeInt(goals.path("for").path("total").path("total")))
+                    .penaltiesScored(safeInt(penalty.path("scored").path("total")))
+                    .penaltiesMissed(safeInt(penalty.path("missed").path("total")))
                     .build();
 
-            // Build Passing from passes
-            JsonNode passes = statsData.path("passes");
-            Integer totalPasses = safeInt(passes.path("total"));
-            Integer passesAccurate = safeInt(passes.path("accuracy"));
-            Double passAccuracyPercentage = null;
-            if (passesAccurate != null && totalPasses != null && totalPasses > 0) {
-                passAccuracyPercentage = (passesAccurate.doubleValue() / totalPasses.doubleValue()) * 100.0;
-            } else if (!passes.path("accuracy").isMissingNode()) {
-                // Try to parse percentage string if available
-                String accuracyStr = passes.path("accuracy").asText("");
-                if (!accuracyStr.isEmpty()) {
-                    try {
-                        String cleaned = accuracyStr.replace("%", "").trim();
-                        passAccuracyPercentage = Double.parseDouble(cleaned);
-                    } catch (NumberFormatException e) {
-                        log.debug("Could not parse pass accuracy: {}", accuracyStr);
-                    }
-                }
-            }
-
-            TeamStatsDTO.Passing passing = TeamStatsDTO.Passing.builder()
-                    .totalPasses(totalPasses)
-                    .passesAccurate(passesAccurate)
-                    .passAccuracyPercentage(passAccuracyPercentage)
-                    .build();
-
-            // Build Defending from goals against, clean sheets, saves, tackles, interceptions
-            JsonNode tackles = statsData.path("tackles");
-            // Saves might be in goals.saves or goalkeeper stats - try both paths
-            Integer saves = safeInt(statsData.path("goals").path("saves"));
-            if (saves == 0) {
-                saves = safeInt(statsData.path("goals").path("against").path("saves"));
-            }
-            // Interceptions might be under tackles or separate
-            Integer interceptions = safeInt(tackles.path("interceptions"));
-            if (interceptions == 0) {
-                interceptions = safeInt(statsData.path("interceptions"));
-            }
-            
             TeamStatsDTO.Defending defending = TeamStatsDTO.Defending.builder()
-                    .goalsConceded(safeInt(goals.path("against").path("total").path("total"))) // goals.against.total.total
-                    .cleanSheets(safeInt(statsData.path("clean_sheet").path("total"))) // clean_sheet.total
-                    .saves(saves)
-                    .tackles(safeInt(tackles.path("total")))
-                    .interceptions(interceptions)
-                    .build();
+                    .goalsConceded(safeInt(goals.path("against").path("total").path("total")))
+                    .cleanSheets(safeInt(statsData.path("clean_sheet").path("total")))
+                            .build();
 
-            // Build Other from cards, penalty, fouls, corners, offsides
             JsonNode cards = statsData.path("cards");
-            JsonNode fouls = statsData.path("fouls");
-            JsonNode corners = statsData.path("corners");
-            JsonNode offsides = statsData.path("offsides");
             
-            // Cards structure: cards.yellow and cards.red are objects with time-based breakdowns
-            // We need to sum them up or get total if available
             Integer yellowCards = 0;
             Integer redCards = 0;
             if (!cards.isMissingNode()) {
-                // Try to get total from yellow/red objects, or sum the time periods
                 JsonNode yellow = cards.path("yellow");
                 if (yellow.has("total")) {
                     yellowCards = safeInt(yellow.path("total"));
                 } else if (yellow.isObject()) {
-                    // Sum all time periods if total not available
                     yellowCards = yellow.findValues("total").stream()
                             .filter(JsonNode::isInt)
                             .mapToInt(JsonNode::asInt)
@@ -287,7 +219,6 @@ public class TeamService {
                 if (red.has("total")) {
                     redCards = safeInt(red.path("total"));
                 } else if (red.isObject()) {
-                    // Sum all time periods if total not available
                     redCards = red.findValues("total").stream()
                             .filter(JsonNode::isInt)
                             .mapToInt(JsonNode::asInt)
@@ -298,15 +229,11 @@ public class TeamService {
             TeamStatsDTO.Other other = TeamStatsDTO.Other.builder()
                     .yellowCards(yellowCards)
                     .redCards(redCards)
-                    .fouls(safeInt(fouls.path("committed"))) // fouls.committed
-                    .corners(safeInt(corners.path("total"))) // corners.total
-                    .offsides(safeInt(offsides.path("total"))) // offsides.total
                     .build();
 
             return TeamStatsDTO.builder()
                     .summary(summary)
                     .attacking(attacking)
-                    .passing(passing)
                     .defending(defending)
                     .other(other)
                     .build();
@@ -343,31 +270,17 @@ public class TeamService {
                         .goalsScored(35)
                         .penaltiesScored(3)
                         .penaltiesMissed(1)
-                        .shotsOnGoal(150)
-                        .shotsOffGoal(80)
-                        .totalShots(230)
-                        .build())
-                .passing(TeamStatsDTO.Passing.builder()
-                        .totalPasses(10000)
-                        .passesAccurate(8500)
-                        .passAccuracyPercentage(85.0)
                         .build())
                 .defending(TeamStatsDTO.Defending.builder()
                         .goalsConceded(20)
                         .cleanSheets(8)
-                        .saves(50)
-                        .tackles(300)
-                        .interceptions(120)
                         .build())
                 .other(TeamStatsDTO.Other.builder()
                         .yellowCards(40)
                         .redCards(2)
-                        .fouls(250)
-                        .corners(100)
-                        .offsides(30)
                         .build())
                 .build();
-    }
+        }
 
     private TeamStatsDTO buildDefaultStats() {
         return TeamStatsDTO.builder()
@@ -382,28 +295,14 @@ public class TeamService {
                         .goalsScored(0)
                         .penaltiesScored(0)
                         .penaltiesMissed(0)
-                        .shotsOnGoal(0)
-                        .shotsOffGoal(0)
-                        .totalShots(0)
-                        .build())
-                .passing(TeamStatsDTO.Passing.builder()
-                        .totalPasses(0)
-                        .passesAccurate(0)
-                        .passAccuracyPercentage(0.0)
                         .build())
                 .defending(TeamStatsDTO.Defending.builder()
                         .goalsConceded(0)
                         .cleanSheets(0)
-                        .saves(0)
-                        .tackles(0)
-                        .interceptions(0)
                         .build())
                 .other(TeamStatsDTO.Other.builder()
                         .yellowCards(0)
                         .redCards(0)
-                        .fouls(0)
-                        .corners(0)
-                        .offsides(0)
                         .build())
                 .build();
     }
@@ -434,7 +333,6 @@ public class TeamService {
      */
     public TeamDetailsDTO getTeamDetails(Long teamId) {
         try {
-            // Fetch team info from FootballService
             FootBallService.TeamResponse teamResponse = footBallService.getTeamInfo(teamId);
             
             if (teamResponse == null) {
@@ -449,7 +347,6 @@ public class TeamService {
                 throw new EntityNotFoundException("Team data incomplete for ID: " + teamId);
             }
 
-            // Map the external data to TeamDetailsDTO
             return TeamDetailsDTO.builder()
                     .stadiumName(venue.getName() != null ? venue.getName() : "")
                     .stadiumImage(venue.getImage() != null ? venue.getImage() : "")
@@ -472,8 +369,6 @@ public class TeamService {
      */
     public List<TrophyDTO> getTrophies(Long teamId) {
         try {
-            // Attempt to fetch trophies from external API
-            // Note: This endpoint may not exist in the standard API-Sports plan
             String jsonResponse = fetchFromApi("trophies", Map.of("team", teamId.toString()));
             JsonNode root = objectMapper.readTree(jsonResponse);
             JsonNode response = root.path("response");
@@ -494,14 +389,11 @@ public class TeamService {
 
             return trophies;
         } catch (Exception e) {
-            // Trophies endpoint might not exist in the API plan, return empty list gracefully
             log.debug("Trophies endpoint not available for team ID {} (this is expected if not in API plan): {}", 
                     teamId, e.getMessage());
             return Collections.emptyList();
         }
     }
-
-    // Helper methods
 
     private String fetchFromApi(String endpoint, Map<String, String> params) {
         String baseUrl = "https://v3.football.api-sports.io/" + endpoint;
@@ -519,18 +411,18 @@ public class TeamService {
 
         try {
             log.debug("Calling API: {}", urlBuilder.toString());
-            ResponseEntity<String> response = restTemplate.exchange(
-                    urlBuilder.toString(),
-                    HttpMethod.GET,
-                    entity,
-                    String.class
-            );
+        ResponseEntity<String> response = restTemplate.exchange(
+                urlBuilder.toString(),
+                HttpMethod.GET,
+                entity,
+                String.class
+        );
             
             if (response.getStatusCode().isError()) {
                 log.error("API returned error status: {} - Body: {}", response.getStatusCode(), response.getBody());
             }
-            
-            return response.getBody();
+
+        return response.getBody();
         } catch (Exception e) {
             log.error("Error calling API endpoint {}: {}", urlBuilder.toString(), e.getMessage(), e);
             throw e;
@@ -538,7 +430,6 @@ public class TeamService {
     }
 
     private Integer extractUefaRanking(JsonNode teamData) {
-        // Try to extract ranking from various possible fields
         if (teamData.has("rank")) {
             return teamData.path("rank").asInt(0);
         }
@@ -567,7 +458,6 @@ public class TeamService {
     private Integer parseHeight(String heightStr) {
         if (heightStr == null || heightStr.isEmpty()) return null;
         try {
-            // Extract number from strings like "180 cm" or "180"
             String numeric = heightStr.replaceAll("[^0-9]", "");
             return numeric.isEmpty() ? null : Integer.parseInt(numeric);
         } catch (Exception e) {

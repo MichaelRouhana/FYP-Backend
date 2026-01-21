@@ -12,7 +12,6 @@ import lombok.NoArgsConstructor;
 public class TeamStatsDTO {
     private Summary summary;
     private Attacking attacking;
-    private Passing passing;
     private Defending defending;
     private Other other;
 
@@ -33,22 +32,9 @@ public class TeamStatsDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class Attacking {
-        private Integer goalsScored;
+    private Integer goalsScored;
         private Integer penaltiesScored;
         private Integer penaltiesMissed;
-        private Integer shotsOnGoal;
-        private Integer shotsOffGoal;
-        private Integer totalShots;
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class Passing {
-        private Integer totalPasses;
-        private Integer passesAccurate;
-        private Double passAccuracyPercentage; // 0-100
     }
 
     @Data
@@ -57,10 +43,7 @@ public class TeamStatsDTO {
     @AllArgsConstructor
     public static class Defending {
         private Integer goalsConceded;
-        private Integer cleanSheets;
-        private Integer saves;
-        private Integer tackles;
-        private Integer interceptions;
+    private Integer cleanSheets;
     }
 
     @Data
@@ -68,10 +51,7 @@ public class TeamStatsDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class Other {
-        private Integer yellowCards;
-        private Integer redCards;
-        private Integer fouls;
-        private Integer corners;
-        private Integer offsides;
-    }
+    private Integer yellowCards;
+    private Integer redCards;
+}
 }

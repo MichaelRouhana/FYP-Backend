@@ -51,7 +51,6 @@ public class TeamController {
             @RequestParam(required = false, name = "leagueId") Long leagueIdParam,
             @RequestParam(required = false) Integer season
     ) {
-        // Support both 'league' and 'leagueId' parameter names for compatibility
         Long leagueId = league != null ? league : (leagueIdParam != null ? leagueIdParam : 140L);
         
         TeamStatsDTO stats = teamService.getTeamStatistics(id, leagueId, season);

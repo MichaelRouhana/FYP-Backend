@@ -10,12 +10,12 @@ public class UserViewDTO {
     private String username;
     private String email;
     private String pfp;
-    private List<String> roles; // Community roles: 'OWNER', 'MODERATOR', 'MEMBER'
-    // Profile fields
-    private Long totalPoints; // User's balance/points
-    private Long totalBets; // Total number of bets
-    private Long totalWins; // Total number of won bets
-    private Double winRate; // Win rate percentage (0.0 to 100.0)
-    private String about; // User's bio/about section
-    private String country; // User's country from address (if available)
+    private List<String> roles;
+    private Long totalPoints;
+    private Long totalBets;
+    private Long totalWins;
+    private Long totalLost;
+    private Double winRate;
+    private String about;
+    private String country;
 }

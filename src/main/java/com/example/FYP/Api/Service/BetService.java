@@ -64,38 +64,30 @@ public class BetService {
             throw ApiRequestException.badRequest("Insufficient balance.");
         }
 
-        // Generate a unique ticketId to group all legs of this accumulator/ticket
         String ticketId = UUID.randomUUID().toString();
         
         List<Bet> bets = new ArrayList<>();
         BigDecimal totalOdds = BigDecimal.ONE;
         
-        // CRITICAL: For accumulators, all legs share the same ticketId
-        // The stake is set on each leg (as reference) but only deducted once from user balance
         for (var leg : betDTO.getLegs()) {
             Fixture fixture = fixtureRepository.findById(leg.getFixtureId())
                     .orElseThrow(() -> ApiRequestException.badRequest("Fixture not found"));
 
-            // Validate Match Settings - CRITICAL: Enforce betting restrictions
             MatchSettings settings = fixture.getMatchSettings();
             if (settings == null) {
-                // If settings don't exist, create with defaults (shouldn't happen, but safety check)
                 settings = MatchSettings.builder()
                         .allowBetting(true)
-                        .allowBettingHT(true)
+                        .allowBettingHT(false)
                         .showMatch(true)
                         .build();
                 fixture.setMatchSettings(settings);
                 fixtureRepository.save(fixture);
             }
             
-            // 1. Global Betting Switch
             if (!Boolean.TRUE.equals(settings.getAllowBetting())) {
                 throw ApiRequestException.badRequest("Betting is currently disabled for this match.");
             }
             
-            // 2. Halftime Betting Switch
-            // Check if match status is "HT" (Half Time) or other halftime statuses
             String statusShort = fixture.getStatusShort();
             if (statusShort != null && ("HT".equalsIgnoreCase(statusShort) || 
                     "1H".equalsIgnoreCase(statusShort) || 
@@ -109,11 +101,11 @@ public class BetService {
                     .marketType(leg.getMarketType())
                     .fixture(fixture)
                     .selection(leg.getSelection())
-                    .stake(betDTO.getStake()) // Same stake on each leg for accumulator
+                    .stake(betDTO.getStake())
                     .odd(leg.getOdd())
                     .status(BetStatus.PENDING)
                     .user(user)
-                    .ticketId(ticketId) // CRITICAL: Group all legs with same ticketId
+                    .ticketId(ticketId)
                     .build();
 
             bets.add(bet);
@@ -128,7 +120,6 @@ public class BetService {
         
         BigDecimal potentialWinnings = BigDecimal.valueOf(betDTO.getStake()).multiply(totalOdds);
         
-        // Build response manually to ensure structure
         List<BetLegResponseDTO> legResponses = new ArrayList<>();
         for (Bet bet : bets) {
             BetLegResponseDTO leg = new BetLegResponseDTO();
@@ -169,7 +160,6 @@ public class BetService {
             if (bet.getFixture() != null) {
                 Fixture f = bet.getFixture();
                 dto.setFixtureId(f.getId());
-                // Parse JSON string safely
                 enrichDtoWithFixtureData(dto, f.getRawJson());
             }
             if (bet.getCreatedDate() != null) {
@@ -185,27 +175,21 @@ public class BetService {
         Bet originalBet = betRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Bet not found with id: " + id));
 
-        // Determine if this is part of an accumulator ticket
         List<Bet> ticketLegs;
         if (originalBet.getTicketId() != null && !originalBet.getTicketId().isEmpty()) {
-            // This is part of an accumulator - fetch ALL legs with the same ticketId
             ticketLegs = betRepository.findByTicketId(originalBet.getTicketId());
             log.info("Found {} legs for ticket {}", ticketLegs.size(), originalBet.getTicketId());
         } else {
-            // Old single-leg bet (backward compatibility) - use just this bet
             ticketLegs = List.of(originalBet);
             log.debug("Bet {} has no ticketId, treating as single-leg bet", id);
         }
 
-        // 1. Manually Build the Response
         BetResponseDTO response = new BetResponseDTO();
-        response.setId(originalBet.getId()); // Use the first bet's ID as the ticket ID
+        response.setId(originalBet.getId());
         
-        // Use the stake from the first leg (all legs should have the same stake for accumulators)
         Double stake = ticketLegs.get(0).getStake();
         response.setStake(stake);
         
-        // 2. Calculate Total Odds & Potential Winnings (for accumulator, multiply all leg odds)
         BigDecimal totalOdds = BigDecimal.ONE;
         for (Bet legBet : ticketLegs) {
             if (legBet.getOdd() != null) {
@@ -214,14 +198,12 @@ public class BetService {
         }
         response.setTotalOdds(totalOdds);
         
-        // Calculate potential winnings: stake * totalOdds (for accumulator)
         if (stake != null) {
             response.setPotentialWinnings(totalOdds.multiply(BigDecimal.valueOf(stake)));
         } else {
             response.setPotentialWinnings(BigDecimal.ZERO);
         }
 
-        // Determine overall status: WON if all legs won, LOST if any leg lost, PENDING otherwise
         boolean allWon = ticketLegs.stream().allMatch(b -> b.getStatus() == BetStatus.WON);
         boolean anyLost = ticketLegs.stream().anyMatch(b -> b.getStatus() == BetStatus.LOST);
         boolean anyVoid = ticketLegs.stream().anyMatch(b -> b.getStatus() == BetStatus.VOID);
@@ -236,7 +218,6 @@ public class BetService {
             response.setStatus(BetStatus.PENDING);
         }
 
-        // 3. Build ALL legs response (CRITICAL for frontend to render all legs)
         List<BetLegResponseDTO> legResponses = new ArrayList<>();
         for (Bet legBet : ticketLegs) {
             BetLegResponseDTO leg = new BetLegResponseDTO();
@@ -251,9 +232,8 @@ public class BetService {
             legResponses.add(leg);
         }
         
-        response.setLegs(legResponses); // <--- Frontend needs ALL legs of the accumulator
+        response.setLegs(legResponses);
 
-        // 4. Enrich with Fixture Data from the FIRST leg (for main display)
         if (!ticketLegs.isEmpty() && ticketLegs.get(0).getFixture() != null) {
             Fixture firstFixture = ticketLegs.get(0).getFixture();
             response.setFixtureId(firstFixture.getId());
@@ -305,7 +285,6 @@ public class BetService {
                 v.setHomeScore(homeScore);
                 v.setAwayScore(awayScore);
                 
-                // CRITICAL FIX: Pass the date string to the DTO
                 v.setMatchDate(date); 
                 v.setMatchStatus(status);
             }

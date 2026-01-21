@@ -147,17 +147,15 @@ public class UserService {
         String country = signUpRequestDTO.getCountry();
         System.out.println("🌍 Signup - Country received: " + country);
         
-        // Build user with country
         User.UserBuilder userBuilder = User.builder()
                 .email(email)
                 .password(encodedPassword)
                 .username(signUpRequestDTO.getUsername())
                 .pfp("/dummy/url")
                 .roles(roles)
-                .isVerified(true) // Auto-verify for development
+                .isVerified(true)
                 .communityRoles(new HashSet<>());
         
-        // Set country in Address if provided
         if (country != null && !country.trim().isEmpty()) {
             Address address = new Address();
             address.setCountry(country);
@@ -177,7 +175,6 @@ public class UserService {
 
         verificationTokenRepository.save(token);
 
-        // Try to send verification email, but don't fail signup if it doesn't work
         try {
             EmailVerificationMessage message = EmailVerificationMessage.builder()
                     .email(user.getEmail())
@@ -186,9 +183,7 @@ public class UserService {
 
             rabbitMqProducer.sendVerification("verificationQueue", message);
         } catch (Exception e) {
-            // Log the error but allow signup to succeed
             System.err.println("Warning: Failed to send verification email - " + e.getMessage());
-            // User is already auto-verified above, so they can still login
         }
     }
 
@@ -341,12 +336,27 @@ public class UserService {
      * @return UserViewDTO with populated statistics
      */
     private UserViewDTO mapUserToViewDTO(User user) {
-        // Calculate betting statistics
-        long totalBets = betRepository.countByUserId(user.getId());
-        long totalWins = betRepository.countByUserIdAndStatus(user.getId(), BetStatus.WON);
-        double winRate = totalBets > 0 ? (double) totalWins / totalBets * 100.0 : 0.0;
+        long distinctTickets = betRepository.countDistinctTicketsByUserId(user.getId());
+        long nullTicketBets = betRepository.findByUserId(user.getId()).stream()
+                .filter(bet -> bet.getTicketId() == null || bet.getTicketId().isEmpty())
+                .count();
+        long totalBets = distinctTickets + nullTicketBets;
         
-        // Map to DTO
+        long distinctWonTickets = betRepository.countDistinctTicketsByUserIdAndStatus(user.getId(), BetStatus.WON);
+        long nullTicketWonBets = betRepository.findByUserId(user.getId()).stream()
+                .filter(bet -> (bet.getTicketId() == null || bet.getTicketId().isEmpty()) && bet.getStatus() == BetStatus.WON)
+                .count();
+        long totalWins = distinctWonTickets + nullTicketWonBets;
+        
+        long distinctLostTickets = betRepository.countDistinctTicketsByUserIdAndStatus(user.getId(), BetStatus.LOST);
+        long nullTicketLostBets = betRepository.findByUserId(user.getId()).stream()
+                .filter(bet -> (bet.getTicketId() == null || bet.getTicketId().isEmpty()) && bet.getStatus() == BetStatus.LOST)
+                .count();
+        long totalLost = distinctLostTickets + nullTicketLostBets;
+        
+        long resolvedBets = totalWins + totalLost;
+        double winRate = resolvedBets > 0 ? (double) totalWins / resolvedBets * 100.0 : 0.0;
+        
         UserViewDTO dto = new UserViewDTO();
         dto.setId(user.getId());
         dto.setUsername(user.getUsername());
@@ -355,15 +365,14 @@ public class UserService {
         dto.setTotalPoints(user.getPoints() != null ? user.getPoints() : 0L);
         dto.setTotalBets(totalBets);
         dto.setTotalWins(totalWins);
+        dto.setTotalLost(totalLost);
         dto.setWinRate(winRate);
         dto.setAbout(user.getAbout());
         
-        // Get country from Address
         if (user.getAddress() != null && user.getAddress().getCountry() != null) {
             dto.setCountry(user.getAddress().getCountry());
         }
         
-        // Map roles (system roles, not community roles for dashboard)
         if (user.getRoles() != null) {
             dto.setRoles(user.getRoles().stream()
                     .map(role -> role.getRole().name())
