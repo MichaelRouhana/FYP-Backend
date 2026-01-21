@@ -29,23 +29,14 @@ public class FixtureResolveJob {
     private final FootBallService footBallService;
     private final ObjectMapper objectMapper;
     
-    // Statuses that indicate a match is finished
     private static final Set<String> FINISHED_STATUSES = Set.of("FT", "AET", "PEN", "PST", "CANC", "ABD", "AWD", "WO");
 
-    /**
-     * MAIN RESOLVE JOB: Finds ALL matches where status is NOT finished 
-     * but the scheduled start time has already passed.
-     * Fetches fresh status by Match ID (bypasses stale bulk sync).
-     * Also checks for finished fixtures with pending bets (retry logic).
-     * Runs every 15 seconds.
-     */
-    @Scheduled(fixedDelay = 15000) // every 15 seconds
+
+    @Scheduled(fixedDelay = 15000)
     @CacheEvict(value = "publicFixtures", allEntries = true)
     @Transactional
     public void resolveFinishedFixtures() {
         try {
-            // First, check for finished fixtures with pending bets (retry logic)
-            // This ensures we retry resolution for any missed bets from previous runs
             List<Fixture> finishedWithPendingBets = fixtureRepository.findFinishedFixturesWithPendingBets();
             if (!finishedWithPendingBets.isEmpty()) {
                 log.info("Found {} finished fixtures with pending bets, retrying resolution", finishedWithPendingBets.size());
@@ -59,7 +50,6 @@ public class FixtureResolveJob {
                 }
             }
 
-            // Find ALL fixtures that are not yet marked as finished
             List<Fixture> unfinishedFixtures = fixtureRepository.findAllUnfinishedFixtures();
             
             if (unfinishedFixtures.isEmpty()) {
@@ -74,7 +64,6 @@ public class FixtureResolveJob {
             
             for (Fixture fixture : unfinishedFixtures) {
                 try {
-                    // Parse the scheduled start time from rawJson
                     JsonNode currentJson = objectMapper.readTree(fixture.getRawJson());
                     String dateStr = currentJson.path("fixture").path("date").asText();
                     String currentStatus = currentJson.path("fixture").path("status").path("short").asText();
@@ -83,16 +72,13 @@ public class FixtureResolveJob {
                         continue;
                     }
                     
-                    // Only check matches whose start time has passed (with 30 min buffer for delays)
                     Instant scheduledStart = Instant.parse(dateStr);
                     if (now.isBefore(scheduledStart.minus(30, ChronoUnit.MINUTES))) {
-                        // Match hasn't started yet, skip
                         continue;
                     }
                     
                     checkedCount++;
                     
-                    // Fetch fresh data by Match ID (real-time truth)
                     String freshJson = footBallService.getFixtureById(fixture.getId());
                     JsonNode root = objectMapper.readTree(freshJson);
                     JsonNode response = root.path("response");
@@ -101,12 +87,9 @@ public class FixtureResolveJob {
                         JsonNode freshMatchNode = response.get(0);
                         String freshStatus = freshMatchNode.path("fixture").path("status").path("short").asText();
                         
-                        // Only update if status has changed
                         if (!currentStatus.equals(freshStatus)) {
-                            // Update the rawJson with fresh data
                             fixture.setRawJson(freshMatchNode.toString());
                             
-                            // If match is now finished, disable betting
                             if (FINISHED_STATUSES.contains(freshStatus)) {
                                 if (fixture.getMatchSettings() == null) {
                                     fixture.setMatchSettings(MatchSettings.builder()
@@ -119,7 +102,6 @@ public class FixtureResolveJob {
                                     fixture.getMatchSettings().setAllowBettingHT(false);
                                 }
                                 
-                                // Resolve bets for this fixture
                                 betResolverService.resolveBetsForFixture(fixture.getId());
                                 finishedCount++;
                                 log.info("Fixture {} finished ({} -> {}), betting disabled, bets resolved", 

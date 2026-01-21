@@ -14,12 +14,12 @@ public class OffsetDateTimeToStringConverter implements AttributeConverter<Offse
     @Override
     public String convertToDatabaseColumn(OffsetDateTime attribute) {
         if (attribute == null) return null;
-        return attribute.format(FORMATTER);  // convert OffsetDateTime to ISO string
+        return attribute.format(FORMATTER);
     }
 
     @Override
     public OffsetDateTime convertToEntityAttribute(String dbData) {
         if (dbData == null) return null;
-        return OffsetDateTime.parse(dbData, FORMATTER);  // parse ISO string back to OffsetDateTime
+        return OffsetDateTime.parse(dbData, FORMATTER);
     }
 }

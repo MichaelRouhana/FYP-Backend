@@ -23,6 +23,13 @@
 			<version>2.15.4</version>
 		</dependency>
 
+		<!-- https://mvnrepository.com/artifact/net.logstash.logback/logstash-logback-encoder -->
+		<dependency>
+			<groupId>net.logstash.logback</groupId>
+			<artifactId>logstash-logback-encoder</artifactId>
+			<version>9.0</version>
+		</dependency>
+
 		<!-- https://mvnrepository.com/artifact/org.springframework.data/spring-data-envers -->
 		<dependency>
 			<groupId>org.springframework.data</groupId>

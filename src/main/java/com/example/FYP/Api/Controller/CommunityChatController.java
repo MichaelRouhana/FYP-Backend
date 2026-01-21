@@ -34,13 +34,12 @@ public class CommunityChatController {
     public CommunityMessageDTO sendMessage(
             @DestinationVariable Long communityId,
             @Payload CommunityMessageDTO payload,
-            Authentication authentication   // ✅ Inject authenticated user
+            Authentication authentication
     ) {
         Community community = communityRepository.findById(communityId)
                 .orElseThrow(() -> new RuntimeException("Community not found"));
 
-        // Get authenticated user from principal
-        String email = authentication.getName(); // username/email
+        String email = authentication.getName();
         User sender = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -48,7 +47,6 @@ public class CommunityChatController {
             throw ApiRequestException.badRequest("User not a member of this community");
         }
 
-        // Save message
         CommunityMessage entity = new CommunityMessage();
         entity.setCommunity(community);
         entity.setSender(sender);
@@ -57,12 +55,11 @@ public class CommunityChatController {
         entity.setSentAt(now);
         CommunityMessage saved = messageRepository.save(entity);
 
-        // Return DTO with full details for WebSocket broadcast
         CommunityMessageDTO dto = new CommunityMessageDTO();
         dto.setId(saved.getId());
         dto.setContent(saved.getContent());
         dto.setSenderUsername(sender.getUsername());
-        dto.setSenderEmail(sender.getEmail()); // Include email for identity verification
+        dto.setSenderEmail(sender.getEmail());
         dto.setSenderId(sender.getId());
         dto.setSentAt(now.format(java.time.format.DateTimeFormatter.ISO_DATE_TIME));
         return dto;

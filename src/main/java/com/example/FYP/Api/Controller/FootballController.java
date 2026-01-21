@@ -1,5 +1,6 @@
 package com.example.FYP.Api.Controller;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
@@ -12,11 +13,12 @@ import java.util.Map;
 @RequestMapping("/football")
 public class FootballController {
 
-    private String apiKey = "7aa48d98c402dc071bb8405ebbb722ec";
+
+    @Value("${football.api.key}")
+    private String apiKey;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    // List of allowed base endpoints and sub-endpoints
     private static final List<String> ALLOWED_ENDPOINTS = List.of(
             "fixtures",
             "fixtures/lineups",
@@ -37,9 +39,6 @@ public class FootballController {
             "odds/bets"
     );
 
-    /**
-     * Handle single-segment endpoints like /football/fixtures, /football/standings
-     */
     @GetMapping("/{endpoint}")
     public ResponseEntity<String> forwardRequest(
             @PathVariable String endpoint,
@@ -48,9 +47,6 @@ public class FootballController {
         return forwardToFootballApi(endpoint, params);
     }
 
-    /**
-     * Handle two-segment endpoints like /football/fixtures/lineups, /football/fixtures/statistics
-     */
     @GetMapping("/{endpoint}/{subEndpoint}")
     public ResponseEntity<String> forwardSubRequest(
             @PathVariable String endpoint,
@@ -61,9 +57,6 @@ public class FootballController {
         return forwardToFootballApi(fullEndpoint, params);
     }
 
-    /**
-     * Common method to forward requests to Football-API
-     */
     private ResponseEntity<String> forwardToFootballApi(String endpoint, Map<String, String> params) {
         if (!ALLOWED_ENDPOINTS.contains(endpoint)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)

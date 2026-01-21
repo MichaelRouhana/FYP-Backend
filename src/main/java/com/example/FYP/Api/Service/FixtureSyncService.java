@@ -26,12 +26,6 @@ public class FixtureSyncService {
     
     private static final Set<String> FINISHED_STATUSES = Set.of("FT", "AET", "PEN", "PST", "CANC", "ABD", "AWD", "WO");
 
-    /**
-     * Syncs fixtures for a given date from the Football API.
-     * - If fixture exists: compares old vs new status, updates rawJson
-     * - If status changed to finished: sets allowBetting = false
-     * - If new fixture: creates with default settings
-     */
     @Transactional
     @CacheEvict(value = "publicFixtures", allEntries = true)
     public void syncFixtures(String date) {
@@ -99,9 +93,9 @@ public class FixtureSyncService {
                             .id(fixtureId)
                             .rawJson(matchNode.toString())
                             .matchSettings(MatchSettings.builder()
-                                    .allowBetting(!isFinished) // Disable if already finished
-                                    .allowBettingHT(false) // Default to false (can be changed by admin)
-                                    .showMatch(true) // Default to true (can be changed by admin)
+                                    .allowBetting(!isFinished)
+                                    .allowBettingHT(false)
+                                    .showMatch(true)
                                     .build())
                             .matchPredictionSettings(defaultPredictionSettings())
                             .build();

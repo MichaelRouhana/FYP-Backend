@@ -54,7 +54,6 @@ public class  CommunityController {
     @Autowired
     private CommunityService communityService;
 
-    // 1. Inject the Message Repository
     @Autowired
     private CommunityMessageRepository messageRepository;
 
@@ -79,7 +78,6 @@ public class  CommunityController {
                     @ApiResponse(description = "Role(s) assigned", responseCode = "200"),
             })
     @PostMapping("/roles/assign")
-   // @RequiredRole({CommunityRoles.OWNER, CommunityRoles.MODERATOR})
     public ResponseEntity<Void> assignRole(@RequestParam Long communityId,
                                            @RequestParam("user") String user,
                                            @RequestParam("roles") List<CommunityRoles> roles) {
@@ -104,7 +102,6 @@ public class  CommunityController {
                     @ApiResponse(description = "Role(s) revoked", responseCode = "200"),
             })
     @PostMapping("/roles/revoke")
-   // @RequiredRole({CommunityRoles.OWNER, CommunityRoles.MODERATOR})
     public ResponseEntity<Void> revokeRole(@RequestParam Long communityId,
                                            @RequestParam("user") String user,
                                            @RequestParam("roles") List<CommunityRoles> roles) {
@@ -176,7 +173,6 @@ public class  CommunityController {
             @RequestPart(value = "file", required = false) MultipartFile file,
             HttpServletRequest request) {
         try {
-            // Manually parse the JSON string since React Native sends it as text/plain
             CommunityRequestDTO communityDTO = objectMapper.readValue(data, CommunityRequestDTO.class);
             return ResponseEntity.ok(communityService.create(communityDTO, file, request));
         } catch (JsonProcessingException e) {
@@ -281,7 +277,6 @@ public class  CommunityController {
                     @Parameter(name = "organizationUUID", description = "organizationUUID", required = true)
 
             })
-    //@RequiredRole({CommunityRoles.OWNER, CommunityRoles.MODERATOR})
     @PostMapping("/kick/{communityId}")
     public ResponseEntity<?> kick(@PathVariable Long communityId,@RequestParam String email) {
         communityService.kick(communityId, email);
@@ -416,7 +411,6 @@ public class  CommunityController {
                     @ApiResponse(description = "Access denied - Only OWNER can promote", responseCode = "403"),
                     @ApiResponse(description = "User not found or not a member", responseCode = "404")
             })
-    // Permission check is handled in service method (checks if requester is creator)
     @PutMapping("/{communityId}/promote/{userId}")
     public ResponseEntity<Map<String, String>> promoteToModerator(
             @PathVariable("communityId") Long communityId,
@@ -440,7 +434,6 @@ public class  CommunityController {
                     @ApiResponse(description = "Access denied - Only OWNER can demote", responseCode = "403"),
                     @ApiResponse(description = "User not found or not a moderator", responseCode = "404")
             })
-    // Permission check is handled in service method (checks if requester is creator)
     @PutMapping("/{communityId}/demote/{userId}")
     public ResponseEntity<Map<String, String>> demoteToMember(
             @PathVariable("communityId") Long communityId,
@@ -463,7 +456,6 @@ public class  CommunityController {
             responses = {
                     @ApiResponse(description = "community patched", responseCode = "200"),
             })
-    //@RequiredRole({CommunityRoles.OWNER, CommunityRoles.MODERATOR})
     @PatchMapping("/{communityId}")
     public ResponseEntity<Void> patch(@PathVariable @NotBlank(message = "communityId cannot be blank") Long communityId,
                                       @RequestBody @Valid CommunityPatchDTO communityPatchDTO) {
@@ -471,7 +463,6 @@ public class  CommunityController {
         return ResponseEntity.ok().build();
     }
 
-    // 2. Add this NEW Endpoint
     @Operation(summary = "Get community messages",
             parameters = {
                     @Parameter(name = "Authorization",
@@ -483,7 +474,6 @@ public class  CommunityController {
     public ResponseEntity<List<CommunityMessageDTO>> getMessages(@PathVariable Long communityId) {
         List<CommunityMessage> messages = messageRepository.findByCommunityIdOrderBySentAtAsc(communityId);
         
-        // Convert Database Entities to DTOs for the frontend
         DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
         List<CommunityMessageDTO> dtos = messages.stream()
                 .map(msg -> {
@@ -491,7 +481,7 @@ public class  CommunityController {
                     dto.setId(msg.getId());
                     dto.setContent(msg.getContent());
                     dto.setSenderUsername(msg.getSender().getUsername());
-                    dto.setSenderEmail(msg.getSender().getEmail()); // Include email for identity verification
+                    dto.setSenderEmail(msg.getSender().getEmail());
                     dto.setSenderId(msg.getSender().getId());
                     dto.setSentAt(msg.getSentAt() != null ? msg.getSentAt().format(formatter) : null);
                     return dto;

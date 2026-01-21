@@ -96,7 +96,6 @@ public class FixtureController {
     @Operation(summary = "Manually sync fixtures", description = "Syncs fixtures for today and the next 7 days from Football-API")
     public ResponseEntity<String> syncFixtures() {
         try {
-            // Sync today and next 7 days
             for (int i = 0; i <= 7; i++) {
                 String date = LocalDate.now().plusDays(i).toString();
                 fixtureSyncService.syncFixtures(date);

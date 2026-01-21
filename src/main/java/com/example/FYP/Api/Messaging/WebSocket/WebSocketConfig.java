@@ -33,7 +33,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 .addInterceptors(new WebSocketHandshakeInterceptor())
                 .withSockJS();
         
-        System.out.println("✅ WebSocket endpoints registered:");
+        System.out.println(" WebSocket endpoints registered:");
         System.out.println("   - /ws (becomes /api/v1/ws with context-path)");
         System.out.println("   - /ws/sockjs (becomes /api/v1/ws/sockjs with context-path)");
     }

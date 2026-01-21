@@ -102,47 +102,4 @@ public class  BetController {
         }
     }
 
-/*
-
-
-    @Operation(summary = "retrieve bet",
-            parameters = {
-                    @Parameter(name = "Authorization",
-                            description = "Bearer token for authentication",
-                            required = true,
-                            in = ParameterIn.HEADER),
-                    @Parameter(name = "organizationUUID", description = "organizationUUID", required = true),
-
-            },
-            responses = {
-                    @ApiResponse(description = "retrieved bet", responseCode = "200", content = @Content(mediaType = "application/json",
-                            schema = @Schema(implementation = BetResponseDTO.class))),
-            })
-    @GetMapping("/{betUUID}")
-    public ResponseEntity<BetResponseDTO> get(@RequestParam("organizationUUID") String organizationUUID,
-                                                    @PathVariable String betUUID) {
-        return ResponseEntity.ok(betService.get(organizationUUID, betUUID));
-    }
-
-
-
-    @Operation(summary = "patch bet",
-            parameters = {
-                    @Parameter(name = "Authorization",
-                            description = "Bearer token for authentication",
-                            required = true,
-                            in = ParameterIn.HEADER),
-                    @Parameter(name = "organizationUUID", description = "organizationUUID", required = true),
-
-            },
-            responses = {
-                    @ApiResponse(description = "bet patched", responseCode = "200"),
-            })
-    @PatchMapping("/{betUUID}")
-    public ResponseEntity<Void> patch(@PathVariable @NotBlank(message = "betUUID cannot be blank") String betUUID,
-                                      @RequestParam("organizationUUID") @NotBlank(message = "organizationUUID cannot be blank") String organizationUUID,
-                                      @RequestBody @Valid BetPatchDTO betPatchDTO) {
-        betService.patch(organizationUUID, betUUID, betPatchDTO);
-        return ResponseEntity.ok().build();
-    }*/
 }

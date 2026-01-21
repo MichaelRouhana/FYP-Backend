@@ -118,7 +118,6 @@ public class DashBoardService {
         return PagedResponse.fromPage(accountResponsePage);
     }
 
-
     public List<UserViewDTO> getUsers() {
         return userRepository.findAll()
                 .stream()
@@ -234,13 +233,6 @@ public class DashBoardService {
                 .build();
     }
 
-    /**
-     * Build cumulative chart with filled-in missing days
-     * @param dailyData Map of date -> daily count
-     * @param initialCount Users created before the date range
-     * @param days Number of days to show (default 7)
-     * @return List of ChartPoint with cumulative totals and all days filled
-     */
     private List<ChartPoint> buildCumulativeChart(Map<LocalDate, Long> dailyData, long initialCount, int days) {
         LocalDate today = LocalDate.now();
         LocalDate startDate = today.minusDays(days - 1);
@@ -260,11 +252,7 @@ public class DashBoardService {
         log.info("📊 User Stats Final Chart Points: {}", chartPoints);
         return chartPoints;
     }
-    
-    /**
-     * Legacy method - kept for backward compatibility
-     * @deprecated Use buildCumulativeChart instead
-     */
+
     @Deprecated
     private List<ChartPoint> usersPerDate(List<User> users) {
         Map<String, Long> grouped = users.stream()
@@ -299,9 +287,6 @@ public class DashBoardService {
         return buildDailyChart(dailyBets, 7);
     }
 
-    /**
-     * Count distinct tickets (not legs) per date
-     */
     private List<ChartPoint> betsPerDateDistinctTickets(List<Bet> bets) {
         LocalDateTime startDate = LocalDateTime.now().minusDays(7);
         
@@ -333,13 +318,7 @@ public class DashBoardService {
         
         return buildDailyChart(dailyTickets, 7);
     }
-    
-    /**
-     * Build daily chart with filled-in missing days (non-cumulative)
-     * @param dailyData Map of date -> daily count
-     * @param days Number of days to show (default 7)
-     * @return List of ChartPoint with daily counts and all days filled
-     */
+
     private List<ChartPoint> buildDailyChart(Map<LocalDate, Long> dailyData, int days) {
         LocalDate today = LocalDate.now();
         LocalDate startDate = today.minusDays(days - 1);

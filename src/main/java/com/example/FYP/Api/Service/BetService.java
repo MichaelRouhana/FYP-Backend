@@ -44,7 +44,7 @@ public class BetService {
     private final SecurityContext securityContext;
     private final FixtureRepository fixtureRepository;
     private final UserRepository userRepository;
-    private final ObjectMapper objectMapper; // Required for JSON parsing
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public BetResponseDTO create(BetRequestDTO betDTO) {
@@ -243,9 +243,6 @@ public class BetService {
         return response;
     }
 
-    /**
-     * Helper to parse the rawJson String and populate DTO fields
-     */
     private void enrichDtoWithFixtureData(Object dto, String rawJson) {
         if (rawJson == null || rawJson.isEmpty()) return;
 

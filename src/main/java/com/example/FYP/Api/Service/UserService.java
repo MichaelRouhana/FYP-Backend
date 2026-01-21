@@ -133,7 +133,7 @@ public class UserService {
         signUpRequestDTO.setPassword(encodedPassword);
 
         String country = signUpRequestDTO.getCountry();
-        System.out.println("🌍 Signup - Country received: " + country);
+        System.out.println("Signup - Country received: " + country);
         
         User.UserBuilder userBuilder = User.builder()
                 .email(email)
@@ -148,12 +148,12 @@ public class UserService {
             Address address = new Address();
             address.setCountry(country);
             userBuilder.address(address);
-            System.out.println("🌍 Signup - Creating Address with country: " + country);
+            System.out.println("Signup - Creating Address with country: " + country);
         }
         
         User user = userRepository.save(userBuilder.build());
         
-        System.out.println("🌍 Signup - Country saved to Address: " + (user.getAddress() != null ? user.getAddress().getCountry() : "null"));
+        System.out.println("Signup - Country saved to Address: " + (user.getAddress() != null ? user.getAddress().getCountry() : "null"));
 
         VerificationToken token = VerificationToken.builder()
                 .token(UUID.randomUUID().toString())
@@ -175,23 +175,20 @@ public class UserService {
         }
     }
 
-
-
-
     public String verify(String token) {
         VerificationToken verificationToken = verificationTokenRepository.findByToken(token);
 
         if (verificationToken == null) {
-            return "emailVerifiedFailed"; // token not found
+            return "emailVerifiedFailed";
         }
 
         if (verificationToken.getExpiryDate().isBefore(LocalDateTime.now())) {
-            return "emailVerifiedFailed"; // token expired
+            return "emailVerifiedFailed";
         }
 
         User user = verificationToken.getUser();
         if (user.isVerified()) {
-            return "emailAlreadyVerified"; // optional: another view
+            return "emailAlreadyVerified";
         }
 
         user.setVerified(true);
@@ -208,12 +205,6 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Get all users with optional search filter
-     * @param search Optional search term for username (case-insensitive)
-     * @param pageable Pagination parameters
-     * @return Paged response of users
-     */
     public PagedResponse<UserViewDTO> getAllUsers(String search, Pageable pageable) {
         Page<User> userPage;
         
@@ -227,33 +218,18 @@ public class UserService {
         return PagedResponse.fromPage(dtoPage);
     }
 
-    /**
-     * Get top betters sorted by number of won bets
-     * @param pageable Pagination parameters
-     * @return Paged response of users sorted by wins
-     */
     public PagedResponse<UserViewDTO> getTopBetters(Pageable pageable) {
         Page<User> userPage = userRepository.findTopBetters(BetStatus.WON.name(), pageable);
         Page<UserViewDTO> dtoPage = userPage.map(this::mapUserToViewDTO);
         return PagedResponse.fromPage(dtoPage);
     }
 
-    /**
-     * Get top users sorted by total points
-     * @param pageable Pagination parameters
-     * @return Paged response of users sorted by points (descending)
-     */
     public PagedResponse<UserViewDTO> getTopPoints(Pageable pageable) {
         Page<User> userPage = userRepository.findAllByOrderByPointsDesc(pageable);
         Page<UserViewDTO> dtoPage = userPage.map(this::mapUserToViewDTO);
         return PagedResponse.fromPage(dtoPage);
     }
 
-    /**
-     * Helper method to map User entity to UserViewDTO with bet statistics
-     * @param user User entity
-     * @return UserViewDTO with populated statistics
-     */
     private UserViewDTO mapUserToViewDTO(User user) {
         long distinctTickets = betRepository.countDistinctTicketsByUserId(user.getId());
         long nullTicketBets = betRepository.findByUserId(user.getId()).stream()

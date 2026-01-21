@@ -9,10 +9,6 @@ import java.util.List;
 
 public interface FixtureRepository extends JpaRepository<Fixture, Long>, JpaSpecificationExecutor<Fixture> {
     
-    /**
-     * Finds all fixtures that are currently marked as "live" in their rawJson.
-     * Live statuses include: 1H, 2H, HT, ET, P, LIVE, BT, INT
-     */
     @Query(value = "SELECT * FROM fixtures f WHERE " +
             "f.raw_json LIKE '%\"short\":\"1H\"%' OR " +
             "f.raw_json LIKE '%\"short\":\"2H\"%' OR " +
@@ -25,19 +21,10 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long>, JpaSpec
             nativeQuery = true)
     List<Fixture> findAllLiveFixtures();
     
-    /**
-     * Finds fixtures that are "Not Started" (NS).
-     * These might need to transition to live or finished.
-     */
     @Query(value = "SELECT * FROM fixtures f WHERE f.raw_json LIKE '%\"short\":\"NS\"%'",
             nativeQuery = true)
     List<Fixture> findAllNotStartedFixtures();
     
-    /**
-     * Finds all fixtures that are NOT finished yet.
-     * This includes NS, live statuses, and any other non-finished status.
-     * Excludes: FT, AET, PEN, PST, CANC, ABD, AWD, WO
-     */
     @Query(value = "SELECT * FROM fixtures f WHERE " +
             "f.raw_json NOT LIKE '%\"short\":\"FT\"%' AND " +
             "f.raw_json NOT LIKE '%\"short\":\"AET\"%' AND " +
@@ -50,10 +37,6 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long>, JpaSpec
             nativeQuery = true)
     List<Fixture> findAllUnfinishedFixtures();
 
-    /**
-     * Finds fixtures that are finished (FT, AET, PEN) AND have pending bets.
-     * This ensures we retry resolution for any missed bets.
-     */
     @Query(value = "SELECT DISTINCT f.* FROM fixtures f " +
             "INNER JOIN bet b ON b.fixture_id = f.id " +
             "WHERE b.status = 'PENDING' " +
@@ -63,12 +46,6 @@ public interface FixtureRepository extends JpaRepository<Fixture, Long>, JpaSpec
             nativeQuery = true)
     List<Fixture> findFinishedFixturesWithPendingBets();
 
-    /**
-     * Finds the last finished match for a specific team.
-     * The team can be either home or away team.
-     * Returns the most recent finished match (FT, AET, PEN) ordered by fixture date descending.
-     * Uses JSON path to check teams.home.id and teams.away.id.
-     */
     @Query(value = "SELECT * FROM fixtures f " +
             "WHERE (CAST(JSON_EXTRACT(f.raw_json, '$.teams.home.id') AS UNSIGNED) = :teamId " +
             "   OR CAST(JSON_EXTRACT(f.raw_json, '$.teams.away.id') AS UNSIGNED) = :teamId) " +

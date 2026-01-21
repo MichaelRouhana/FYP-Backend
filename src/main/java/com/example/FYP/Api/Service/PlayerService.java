@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -22,14 +23,10 @@ public class PlayerService {
 
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate = new RestTemplate();
-    private final String apiKey = "7aa48d98c402dc071bb8405ebbb722ec";
+    @Value("${football.api.key}")
+    private String apiKey;
 
-    /**
-     * Get detailed statistics for a player
-     * @param playerId The player ID
-     * @param season The season year (default: 2023)
-     * @return PlayerDetailedStatsDTO with comprehensive player statistics
-     */
+
     public PlayerDetailedStatsDTO getPlayerStats(Long playerId, int season) {
         try {
             String jsonResponse = fetchFromApi("players", Map.of("id", playerId.toString(), "season", String.valueOf(season)));
@@ -40,7 +37,6 @@ public class PlayerService {
                 throw new EntityNotFoundException("Player not found with ID: " + playerId);
             }
 
-            // API returns: response[0].statistics[0] contains the stats
             JsonNode playerData = response.get(0);
             JsonNode statistics = playerData.path("statistics");
             
@@ -60,7 +56,6 @@ public class PlayerService {
             JsonNode fouls = stats.path("fouls");
             JsonNode penalty = stats.path("penalty");
 
-            // Build Summary
             PlayerDetailedStatsDTO.Summary summary = PlayerDetailedStatsDTO.Summary.builder()
                     .matchesPlayed(safeIntOrZero(games.path("appearences")))
                     .minutesPlayed(safeIntOrZero(games.path("minutes")))
@@ -69,7 +64,6 @@ public class PlayerService {
                     .rating(safeStringOrDash(games.path("rating")))
                     .build();
 
-            // Build Attacking
             PlayerDetailedStatsDTO.Attacking attacking = PlayerDetailedStatsDTO.Attacking.builder()
                     .shotsTotal(safeIntOrZero(shots.path("total")))
                     .shotsOnTarget(safeIntOrZero(shots.path("on")))
@@ -79,7 +73,6 @@ public class PlayerService {
                     .penaltiesMissed(safeIntOrZero(penalty.path("missed")))
                     .build();
 
-            // Build Passing
             Integer passAccuracy = 0;
             if (!passes.path("accuracy").isMissingNode() && !passes.path("accuracy").isNull()) {
                 String accuracyStr = passes.path("accuracy").asText("");
@@ -100,7 +93,6 @@ public class PlayerService {
                     .passAccuracy(passAccuracy)
                     .build();
 
-            // Build Defending
             PlayerDetailedStatsDTO.Defending defending = PlayerDetailedStatsDTO.Defending.builder()
                     .tacklesTotal(safeIntOrZero(tackles.path("total")))
                     .interceptions(safeIntOrZero(tackles.path("interceptions")))
@@ -109,7 +101,6 @@ public class PlayerService {
                     .duelsWon(safeIntOrZero(duels.path("won")))
                     .build();
 
-            // Build Discipline
             PlayerDetailedStatsDTO.Discipline discipline = PlayerDetailedStatsDTO.Discipline.builder()
                     .yellowCards(safeIntOrZero(cards.path("yellow")))
                     .redCards(safeIntOrZero(cards.path("red")))

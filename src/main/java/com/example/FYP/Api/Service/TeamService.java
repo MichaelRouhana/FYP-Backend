@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -34,11 +35,10 @@ public class TeamService {
     private final FixtureMapper fixtureMapper;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate = new RestTemplate();
-    private final String apiKey = "7aa48d98c402dc071bb8405ebbb722ec";
+    @Value("${football.api.key}")
+    private String apiKey;
 
-    /**
-     * Get team header information
-     */
+
     public TeamHeaderDTO getTeamHeader(Long teamId) {
         try {
             String jsonResponse = fetchFromApi("teams", Map.of("id", teamId.toString()));

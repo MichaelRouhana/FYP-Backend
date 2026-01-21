@@ -13,7 +13,6 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Setter
 @SuperBuilder
 @NoArgsConstructor
-//@EntityListeners({AuditingEntityListener.class, AuditListener.class})
 @EntityListeners({AuditingEntityListener.class})
 public abstract class AuditableEntity extends BaseEntity {
 

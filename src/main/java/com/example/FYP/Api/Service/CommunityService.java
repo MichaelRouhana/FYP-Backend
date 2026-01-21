@@ -52,133 +52,104 @@ public class CommunityService {
 
     @Transactional
     public CommunityResponseDTO create(@Valid CommunityRequestDTO communityDTO, MultipartFile file, HttpServletRequest request) {
-        // Validation: Check if a community with this name already exists
         if (communityRepository.existsByName(communityDTO.getName())) {
             throw ApiRequestException.badRequest("A community with this name already exists");
         }
 
-        // Map DTO fields to entity
-        // Combine shortDescription and description if both are provided
         String description;
         if (communityDTO.getDescription() != null && !communityDTO.getDescription().trim().isEmpty()) {
             if (communityDTO.getShortDescription() != null && !communityDTO.getShortDescription().trim().isEmpty()) {
-                // Combine short and full description
                 description = communityDTO.getShortDescription().trim() + "\n\n" + communityDTO.getDescription().trim();
             } else {
-                // Use full description only
                 description = communityDTO.getDescription().trim();
             }
         } else if (communityDTO.getAbout() != null && !communityDTO.getAbout().trim().isEmpty()) {
-            // Fallback to legacy about field
             description = communityDTO.getAbout().trim();
         } else {
             throw ApiRequestException.badRequest("Community description is required");
         }
 
-        // Handle file upload if provided
         String logoUrl = null;
         if (file != null && !file.isEmpty()) {
             try {
                 logoUrl = saveCommunityLogo(file, request);
-                log.info("✅ Community logo uploaded: {}", logoUrl);
+                log.info("Community logo uploaded: {}", logoUrl);
             } catch (IOException e) {
-                log.error("❌ Error saving community logo: {}", e.getMessage());
+                log.error("Error saving community logo: {}", e.getMessage());
                 throw ApiRequestException.badRequest("Failed to save community logo: " + e.getMessage());
             }
         } else if (communityDTO.getLogo() != null && !communityDTO.getLogo().isEmpty()) {
-            // Fallback to legacy logo field if no file uploaded
             logoUrl = communityDTO.getLogo();
         }
 
-        // Generate unique invite code before creating the community
         String inviteCode = java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         
-        // Ensure the code is unique (very unlikely collision, but safety check)
         while (communityRepository.findByInviteCode(inviteCode).isPresent()) {
             inviteCode = java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }
 
         User user = securityContext.getCurrentUser();
 
-        // Create Community entity (without roles initially)
         Community community = Community.builder()
                 .name(communityDTO.getName())
                 .logo(logoUrl)
                 .location(communityDTO.getLocation())
-                .about(description) // Map combined description to about field
+                .about(description)
                 .inviteCode(inviteCode)
                 .users(new ArrayList<>(List.of(user)))
                 .rules(communityDTO.getRules())
-                .creator(user) // Set creator
+                .creator(user)
                 .build();
-
-        // Set createdAt is handled by AuditableEntity
-        // memberCount is derived from users.size() (starts with 1 - the admin creator)
-
-        // CRITICAL: Save the Community FIRST before creating roles
-        // This ensures the Community has a persisted ID
         Community savedCommunity = communityRepository.save(community);
-        log.info("✅ Community '{}' saved with ID: {}", savedCommunity.getName(), savedCommunity.getId());
+        log.info("Community '{}' saved with ID: {}", savedCommunity.getName(), savedCommunity.getId());
 
-        // Now create CommunityRole objects with the persisted Community
         CommunityRole ownerRole = CommunityRole.builder()
                 .role(CommunityRoles.OWNER)
-                .community(savedCommunity) // Use persisted community
+                .community(savedCommunity)
                 .build();
         
         CommunityRole memberRole = CommunityRole.builder()
                 .role(CommunityRoles.MEMBER)
-                .community(savedCommunity) // Use persisted community
+                .community(savedCommunity)
                 .build();
 
-        // Save the roles to get their IDs
         CommunityRole savedOwnerRole = roleRepository.save(ownerRole);
         CommunityRole savedMemberRole = roleRepository.save(memberRole);
-        log.info("✅ Community roles created: OWNER (ID: {}), MEMBER (ID: {})", 
+        log.info("Community roles created: OWNER (ID: {}), MEMBER (ID: {})",
                 savedOwnerRole.getId(), savedMemberRole.getId());
 
-        // Now associate roles with the community and user
         savedCommunity.setRoles(new HashSet<>(List.of(savedOwnerRole, savedMemberRole)));
         user.getCommunityRoles().addAll(new HashSet<>(List.of(savedOwnerRole, savedMemberRole)));
 
-        // Save the updated entities
         communityRepository.save(savedCommunity);
         userRepository.save(user);
         
-        log.info("✅ Community '{}' created by user {} (ID: {})", 
+        log.info("Community '{}' created by user {} (ID: {})",
                 savedCommunity.getName(), user.getUsername(), user.getId());
         return mapToDTO(savedCommunity);
     }
 
-    /**
-     * Save community logo file and return the public URL
-     */
     private String saveCommunityLogo(MultipartFile file, HttpServletRequest request) throws IOException {
-        // Validate file
         if (file.isEmpty()) {
             throw new IllegalArgumentException("File is empty");
         }
 
-        // Validate file type (only images)
         String contentType = file.getContentType();
         if (contentType == null || !contentType.startsWith("image/")) {
             throw new IllegalArgumentException("File must be an image");
         }
 
-        // Create uploads directory if it doesn't exist
         String uploadDir = "uploads/communities";
         Path uploadPath = Paths.get(uploadDir);
         if (!Files.exists(uploadPath)) {
             Files.createDirectories(uploadPath);
-            log.info("📁 Created upload directory: {}", uploadPath.toAbsolutePath());
+            log.info("Created upload directory: {}", uploadPath.toAbsolutePath());
         }
 
-        // Generate unique filename
         String fileExtension = "";
         if (file.getOriginalFilename() != null && file.getOriginalFilename().contains(".")) {
             fileExtension = file.getOriginalFilename().substring(file.getOriginalFilename().lastIndexOf('.'));
         } else {
-            // Determine extension from content type
             if (contentType != null) {
                 if (contentType.contains("jpeg") || contentType.contains("jpg")) {
                     fileExtension = ".jpg";
@@ -189,7 +160,7 @@ public class CommunityService {
                 } else if (contentType.contains("webp")) {
                     fileExtension = ".webp";
                 } else {
-                    fileExtension = ".jpg"; // Default
+                    fileExtension = ".jpg";
                 }
             } else {
                 fileExtension = ".jpg";
@@ -200,18 +171,15 @@ public class CommunityService {
                 (file.getOriginalFilename() != null ? file.getOriginalFilename().hashCode() : "logo") + fileExtension;
         Path filePath = uploadPath.resolve(fileName);
 
-        // Save the file
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-        log.info("💾 File saved to: {}", filePath.toAbsolutePath());
+        log.info("File saved to: {}", filePath.toAbsolutePath());
 
-        // Construct the full URL from the request
-        String scheme = request.getScheme(); // http or https
-        String serverName = request.getServerName(); // IP or hostname
+        String scheme = request.getScheme();
+        String serverName = request.getServerName();
         int serverPort = request.getServerPort();
-        String contextPath = request.getContextPath(); // /api/v1
+        String contextPath = request.getContextPath();
 
-        // Build the full URL
-        String baseUrl = scheme + "://" + serverName + 
+        String baseUrl = scheme + "://" + serverName +
                 (serverPort != 80 && serverPort != 443 ? ":" + serverPort : "") + contextPath;
         String logoUrl = baseUrl + "/uploads/communities/" + fileName;
 
@@ -265,21 +233,17 @@ public class CommunityService {
         Community community = communityRepository.findById(communityId)
                 .orElseThrow(() -> new EntityNotFoundException("Community not found"));
         
-        // Self-healing: Generate invite code if missing (for old communities)
         if (community.getInviteCode() == null || community.getInviteCode().isEmpty()) {
-            // Generate a unique code
             String newCode = java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
             
-            // Ensure the code is unique (very unlikely collision, but safety check)
             while (communityRepository.findByInviteCode(newCode).isPresent()) {
                 newCode = java.util.UUID.randomUUID().toString().substring(0, 8).toUpperCase();
             }
             
-            // Set and save the new code
             community.setInviteCode(newCode);
             communityRepository.save(community);
             
-            log.info("🔧 Self-healed community {} with new invite code: {}", communityId, newCode);
+            log.info("Self-healed community {} with new invite code: {}", communityId, newCode);
         }
         
         return mapToDTOView(community);
@@ -330,16 +294,12 @@ public class CommunityService {
                 .toList();
     }
 
-    /**
-     * Get community members with their roles
-     */
     public List<CommunityMemberDTO> getMembersWithRoles(Long communityId) {
         Community community = communityRepository.findById(communityId)
                 .orElseThrow(() -> new EntityNotFoundException("Community not found"));
 
         return community.getUsers().stream()
                 .map(user -> {
-                    // Get user's roles in this community
                     List<String> communityRoles = user.getCommunityRoles().stream()
                             .filter(role -> role.getCommunity().getId().equals(communityId))
                             .map(role -> role.getRole().name())
@@ -359,26 +319,20 @@ public class CommunityService {
                 .toList();
     }
 
-    /**
-     * Get only moderators of the community
-     */
     public List<CommunityMemberDTO> getModerators(Long communityId) {
         Community community = communityRepository.findById(communityId)
                 .orElseThrow(() -> new EntityNotFoundException("Community not found"));
 
-        // Find MODERATOR role for this community
         List<CommunityRole> moderatorRoles = roleRepository.findByCommunityIdAndRole(communityId, CommunityRoles.MODERATOR);
         
         if (moderatorRoles.isEmpty()) {
-            return List.of(); // No moderators
+            return List.of();
         }
 
         CommunityRole moderatorRole = moderatorRoles.get(0);
 
-        // Get all users with MODERATOR role
         return moderatorRole.getUsers().stream()
                 .map(user -> {
-                    // Get all user's roles in this community
                     List<String> communityRoles = user.getCommunityRoles().stream()
                             .filter(role -> role.getCommunity().getId().equals(communityId))
                             .map(role -> role.getRole().name())
@@ -423,7 +377,6 @@ public class CommunityService {
 
     @Transactional
     public void joinByInviteCode(String inviteCode) {
-        // Find community by invite code
         Community community = communityRepository.findByInviteCode(inviteCode)
                 .orElseThrow(() -> new EntityNotFoundException("Invalid invite code"));
         
@@ -439,19 +392,15 @@ public class CommunityService {
 
     @Transactional
     public void joinCommunity(String inviteCode, User user) {
-        // Find community by invite code
         Community community = communityRepository.findByInviteCode(inviteCode)
                 .orElseThrow(() -> new EntityNotFoundException("Community not found with the provided invite code"));
         
-        // Check if user is already a member
         if (community.getUsers().contains(user)) {
             throw ApiRequestException.badRequest("Already a member");
         }
         
-        // Add user to community
         community.getUsers().add(user);
         
-        // Save community (memberCount is derived from users.size(), no need to increment separately)
         communityRepository.save(community);
     }
 
@@ -462,21 +411,15 @@ public class CommunityService {
                 .toList();
     }
 
-    /**
-     * Map User entity to UserViewDTO with community-specific roles
-     */
     private UserViewDTO mapUserToDTO(User user, Long communityId) {
         UserViewDTO dto = modelMapper.map(user, UserViewDTO.class);
         
-        // Map ID (ModelMapper might not map it if it's @JsonIgnore)
         dto.setId(user.getId());
         
-        // Map points
         if (dto.getTotalPoints() == null && user.getPoints() != null) {
             dto.setTotalPoints(user.getPoints());
         }
         
-        // Get community roles for this user
         List<String> communityRoles = user.getCommunityRoles().stream()
                 .filter(role -> role.getCommunity() != null && role.getCommunity().getId().equals(communityId))
                 .map(role -> role.getRole().name())
@@ -484,7 +427,6 @@ public class CommunityService {
                 .toList();
         dto.setRoles(communityRoles);
         
-        // Map country from address
         if (user.getAddress() != null && user.getAddress().getCountry() != null) {
             dto.setCountry(user.getAddress().getCountry());
         }
@@ -492,18 +434,11 @@ public class CommunityService {
         return dto;
     }
 
-    /**
-     * Get moderators (OWNER and MODERATOR roles) for a community
-     * Ensures the creator (OWNER) is always included
-     */
     private List<UserViewDTO> getModeratorsForCommunity(Community community) {
         Long communityId = community.getId();
         
-        // Query from community's users and filter by roles
-        // This is the most reliable approach as it queries from the owning side (User.communityRoles)
         List<User> moderatorUsers = community.getUsers().stream()
                 .filter(user -> {
-                    // Check if user has OWNER or MODERATOR role for this specific community
                     return user.getCommunityRoles().stream()
                             .anyMatch(role -> {
                                 if (role.getCommunity() == null) return false;
@@ -516,21 +451,16 @@ public class CommunityService {
                 .distinct()
                 .toList();
         
-        // Map to UserViewDTO
         List<UserViewDTO> moderators = moderatorUsers.stream()
                 .map(user -> mapUserToDTO(user, communityId))
                 .toList();
         
-        // Ensure creator (OWNER) is always included
-        // If no OWNER found, log warning (this should not happen if community was created properly)
         boolean hasOwner = moderators.stream().anyMatch(m -> m.getRoles() != null && m.getRoles().contains("OWNER"));
         if (!hasOwner && !community.getUsers().isEmpty()) {
-            log.warn("⚠️ No OWNER found for community {} (ID: {}). Creator might not have OWNER role assigned.", 
+            log.warn("No OWNER found for community {} (ID: {}). Creator might not have OWNER role assigned.",
                     community.getName(), communityId);
-            // Try to find and add creator by checking role repository
             List<CommunityRole> ownerRoles = roleRepository.findByCommunityIdAndRole(communityId, CommunityRoles.OWNER);
             if (!ownerRoles.isEmpty()) {
-                // Find users with OWNER role by ID comparison
                 for (User user : community.getUsers()) {
                     boolean hasOwnerRole = user.getCommunityRoles().stream()
                             .anyMatch(role -> {
@@ -538,10 +468,9 @@ public class CommunityService {
                                 if (!role.getCommunity().getId().equals(communityId)) return false;
                                 return role.getRole() == CommunityRoles.OWNER;
                             });
-                    // Compare Long (from DTO) with long (from User entity) - use == with null check
                     if (hasOwnerRole && moderators.stream().noneMatch(m -> m.getId() != null && m.getId() == user.getId())) {
-                        moderators.add(0, mapUserToDTO(user, communityId)); // Add OWNER at the beginning
-                        log.info("✅ Added missing OWNER to moderators list for community {}", communityId);
+                        moderators.add(0, mapUserToDTO(user, communityId));
+                        log.info("Added missing OWNER to moderators list for community {}", communityId);
                     }
                 }
             }
@@ -550,19 +479,15 @@ public class CommunityService {
         return moderators;
     }
 
-    /**
-     * Get top 3 leaderboard members by points
-     */
     private List<UserViewDTO> getLeaderboardForCommunity(Community community) {
         Long communityId = community.getId();
         
-        // Get all members, sort by points descending, limit to top 3
         return community.getUsers().stream()
-                .filter(user -> user.getPoints() != null) // Only users with points
+                .filter(user -> user.getPoints() != null)
                 .sorted((u1, u2) -> {
                     Long p1 = u1.getPoints() != null ? u1.getPoints() : 0L;
                     Long p2 = u2.getPoints() != null ? u2.getPoints() : 0L;
-                    return p2.compareTo(p1); // Descending order
+                    return p2.compareTo(p1);
                 })
                 .limit(3)
                 .map(user -> mapUserToDTO(user, communityId))
@@ -570,7 +495,6 @@ public class CommunityService {
     }
 
     private CommunityResponseDTO mapToDTO(Community community) {
-        // Get moderator IDs for this community
         List<CommunityRole> moderatorRoles = roleRepository.findByCommunityIdAndRole(community.getId(), CommunityRoles.MODERATOR);
         List<Long> moderatorIds = moderatorRoles.isEmpty() 
                 ? List.of() 
@@ -578,7 +502,6 @@ public class CommunityService {
                         .map(User::getId)
                         .toList();
 
-        // Get moderators and leaderboard
         List<UserViewDTO> moderators = getModeratorsForCommunity(community);
         List<UserViewDTO> leaderboard = getLeaderboardForCommunity(community);
 
@@ -598,7 +521,6 @@ public class CommunityService {
     }
 
     private CommunityViewDTO mapToDTOView(Community community) {
-        // Get moderators and leaderboard
         List<UserViewDTO> moderators = getModeratorsForCommunity(community);
         List<UserViewDTO> leaderboard = getLeaderboardForCommunity(community);
 
@@ -638,21 +560,13 @@ public class CommunityService {
             return roleRepository.findRolesByUserAndCommunity(email, communityId);
         }
 
-    /**
-     * Promote a user to MODERATOR role in a community
-     * Only OWNER (creator) can promote members
-     * Uses JPA entities to match getModerators logic
-     */
     @Transactional
     public void promoteToModerator(Long communityId, Long userId, User requester) {
-        // 1. Fetch Community and User
         Community community = communityRepository.findById(communityId)
                 .orElseThrow(() -> new EntityNotFoundException("Community not found"));
         
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
-
-        // 2. Permission checks - Only creator can promote
         if (community.getCreator() == null) {
             throw ApiRequestException.badRequest("Community has no creator. Cannot determine permissions.");
         }
@@ -661,12 +575,10 @@ public class CommunityService {
             throw ApiRequestException.badRequest("Only community OWNER (creator) can promote members");
         }
 
-        // 3. Find or Create the MODERATOR Role for this community
         List<CommunityRole> existingModeratorRoles = roleRepository.findByCommunityIdAndRole(communityId, CommunityRoles.MODERATOR);
         CommunityRole moderatorRole;
         
         if (existingModeratorRoles.isEmpty()) {
-            // Create new MODERATOR role for this community
             moderatorRole = CommunityRole.builder()
                     .role(CommunityRoles.MODERATOR)
                     .community(community)
@@ -674,11 +586,9 @@ public class CommunityService {
             moderatorRole = roleRepository.save(moderatorRole);
             log.info("📝 Created new MODERATOR role for community {}", communityId);
         } else {
-            // Use existing MODERATOR role
             moderatorRole = existingModeratorRoles.get(0);
         }
 
-        // 4. Assign Role - Check if user already has MODERATOR role for this community
         boolean alreadyHasModeratorRole = user.getCommunityRoles().stream()
                 .anyMatch(role -> role.getCommunity() != null 
                         && role.getCommunity().getId().equals(communityId)
@@ -687,27 +597,20 @@ public class CommunityService {
         if (!alreadyHasModeratorRole) {
             user.getCommunityRoles().add(moderatorRole);
             userRepository.save(user);
-            log.info("✅ User {} promoted to MODERATOR in community {}. Role assigned via JPA.", userId, communityId);
+            log.info("User {} promoted to MODERATOR in community {}. Role assigned via JPA.", userId, communityId);
         } else {
-            log.info("ℹ️ User {} already has MODERATOR role in community {}", userId, communityId);
+            log.info("User {} already has MODERATOR role in community {}", userId, communityId);
         }
     }
 
-    /**
-     * Demote a MODERATOR back to regular MEMBER
-     * Only OWNER (creator) can demote moderators
-     * Uses JPA entities to match getModerators logic
-     */
     @Transactional
     public void demoteToMember(Long communityId, Long userId, User requester) {
-        // 1. Fetch Community and User
         Community community = communityRepository.findById(communityId)
                 .orElseThrow(() -> new EntityNotFoundException("Community not found"));
         
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found"));
 
-        // 2. Permission checks - Only creator can demote
         if (community.getCreator() == null) {
             throw ApiRequestException.badRequest("Community has no creator. Cannot determine permissions.");
         }
@@ -716,32 +619,29 @@ public class CommunityService {
             throw ApiRequestException.badRequest("Only community OWNER (creator) can demote moderators");
         }
 
-        // Prevent demoting the OWNER/creator
         if (community.getCreator().getId() == userId) {
             throw ApiRequestException.badRequest("Cannot demote the community OWNER (creator)");
         }
 
-        // 3. Find the MODERATOR role for this community
         List<CommunityRole> moderatorRoles = roleRepository.findByCommunityIdAndRole(communityId, CommunityRoles.MODERATOR);
         
         if (moderatorRoles.isEmpty()) {
             log.info("ℹ️ No MODERATOR role found for community {}. User {} may not be a moderator.", communityId, userId);
-            return; // Nothing to demote
+            return;
         }
 
         CommunityRole moderatorRole = moderatorRoles.get(0);
 
-        // 4. Remove Role - Find and remove MODERATOR role for this community from user's roles
-        boolean removed = user.getCommunityRoles().removeIf(role -> 
+        boolean removed = user.getCommunityRoles().removeIf(role ->
                 role.getCommunity() != null 
                 && role.getCommunity().getId().equals(communityId)
                 && role.getRole() == CommunityRoles.MODERATOR);
         
         if (removed) {
             userRepository.save(user);
-            log.info("✅ User {} demoted from MODERATOR to MEMBER in community {}. Role removed via JPA.", userId, communityId);
+            log.info("User {} demoted from MODERATOR to MEMBER in community {}. Role removed via JPA.", userId, communityId);
         } else {
-            log.info("ℹ️ User {} does not have MODERATOR role in community {}", userId, communityId);
+            log.info("ℹUser {} does not have MODERATOR role in community {}", userId, communityId);
         }
     }
 }

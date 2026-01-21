@@ -109,7 +109,7 @@ public class UserController {
     @GetMapping("/verify")
     public ResponseEntity<String> verify(@RequestParam("token") String token) throws IOException {
 
-        String viewName = userService.verify(token); // "emailVerifiedSuccess" or "emailVerifiedFailed"
+        String viewName = userService.verify(token);
 
         ClassPathResource resource = new ClassPathResource("templates/" + viewName + ".html");
         String html = new String(resource.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
@@ -269,10 +269,10 @@ public class UserController {
             HttpServletRequest request) throws IOException {
         User currentUser = securityContext.getCurrentUser();
         
-        System.out.println("📸 Avatar upload received for user: " + currentUser.getUsername());
-        System.out.println("📸 File name: " + file.getOriginalFilename());
-        System.out.println("📸 File size: " + file.getSize() + " bytes");
-        System.out.println("📸 Content type: " + file.getContentType());
+        System.out.println(" Avatar upload received for user: " + currentUser.getUsername());
+        System.out.println(" File name: " + file.getOriginalFilename());
+        System.out.println(" File size: " + file.getSize() + " bytes");
+        System.out.println(" Content type: " + file.getContentType());
         
         if (file.isEmpty()) {
             throw new ApiRequestException("File is empty");
@@ -282,7 +282,7 @@ public class UserController {
         Path uploadPath = Paths.get(uploadDir);
         if (!Files.exists(uploadPath)) {
             Files.createDirectories(uploadPath);
-            System.out.println("📁 Created upload directory: " + uploadPath.toAbsolutePath());
+            System.out.println(" Created upload directory: " + uploadPath.toAbsolutePath());
         }
         
         String fileExtension = "";
@@ -306,7 +306,7 @@ public class UserController {
         Path filePath = uploadPath.resolve(fileName);
         
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-        System.out.println("💾 File saved to: " + filePath.toAbsolutePath());
+        System.out.println("File saved to: " + filePath.toAbsolutePath());
         
         String scheme = request.getScheme();
         String serverName = request.getServerName();
@@ -319,7 +319,7 @@ public class UserController {
         currentUser.setPfp(avatarUrl);
         userRepository.save(currentUser);
         
-        System.out.println("✅ Avatar URL updated: " + avatarUrl);
+        System.out.println(" Avatar URL updated: " + avatarUrl);
         
         return ResponseEntity.ok(Map.of("avatarUrl", avatarUrl));
     }

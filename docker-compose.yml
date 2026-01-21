@@ -2,7 +2,6 @@ version: '3.8'
 
 services:
   app:
-    # image: charbelba/erp:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -13,10 +12,12 @@ services:
       - ./src/main/resources/application.properties:/app/config/application.properties
     environment:
       SPRING_CONFIG_LOCATION: "file:/app/config/application.properties"
+      SPRING_PROFILES_ACTIVE: elk
       SPRING_DATASOURCE_URL: "jdbc:mysql://mysql-db:3306/jwt_auth_db?allowPublicKeyRetrieval=true&useSSL=false&createDatabaseIfNotExist=true"
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root
-      
+      LOGSTASH_HOST: logstash
+      LOGSTASH_PORT: 5044
     depends_on:
       - mysql
       - logstash
@@ -55,7 +56,7 @@ services:
     ports:
       - "5044:5044"
     volumes:
-      - ./src/logstash.conf:/usr/share/logstash/config/logstash.conf # Ensure this path is correct based on where your file is
+      - ./pipeline/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
     depends_on:
       elasticsearch:
         condition: service_healthy
@@ -68,7 +69,7 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - xpack.security.transport.ssl.enabled=false  # Disable SSL for transport
+      - xpack.security.transport.ssl.enabled=false
     ports:
       - "9200:9200"
     networks:
@@ -88,6 +89,9 @@ services:
       - "5601:5601"
     networks:
       - backend
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
 
 volumes:
   mysql-data:

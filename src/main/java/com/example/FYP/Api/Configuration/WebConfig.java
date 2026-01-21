@@ -15,13 +15,7 @@ import java.nio.file.Paths;
 public class WebConfig implements WebMvcConfigurer {
 
     @Override
-    public void configurePathMatch(PathMatchConfigurer configurer) {
-        // configurer.addPathPrefix("/api/v1", HandlerTypePredicate.forAnnotation(RestController.class));
-    }
-
-    @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        // Serve uploaded files from the uploads directory
         String uploadPath = Paths.get("uploads").toAbsolutePath().toString();
         registry.addResourceHandler("/uploads/**")
                 .addResourceLocations("file:" + uploadPath + "/");

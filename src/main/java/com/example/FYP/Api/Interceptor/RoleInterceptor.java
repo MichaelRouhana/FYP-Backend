@@ -61,7 +61,6 @@ public class RoleInterceptor implements HandlerInterceptor {
 
         User user = securityContext.getCurrentUser();
 
-        // Handle single required role
         if (requiredRole != null) {
             Set<CommunityRoles> allowedRoles = Set.of(requiredRole.value());
             boolean hasRole = user.getCommunityRoles().stream()
@@ -74,7 +73,6 @@ public class RoleInterceptor implements HandlerInterceptor {
             }
         }
 
-        // Handle type-based role access
         if (requiredRoleTypes != null) {
             String type = request.getParameter("type");
 

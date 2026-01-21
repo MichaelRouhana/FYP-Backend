@@ -17,14 +17,10 @@ public class FixtureSyncJob {
 
     private final FixtureSyncService syncService;
 
-    /**
-     * Sync fixtures on application startup
-     */
     @PostConstruct
     public void syncOnStartup() {
         log.info("Syncing fixtures on startup...");
         try {
-            // Sync today and next 7 days on startup
             for (int i = 0; i <= 7; i++) {
                 String date = LocalDate.now().plusDays(i).toString();
                 syncService.syncFixtures(date);
@@ -36,11 +32,7 @@ public class FixtureSyncJob {
         }
     }
 
-    /**
-     * Sync today's fixtures every 1 minute to keep data fresh.
-     * The cache is evicted by FixtureSyncService.
-     */
-    @Scheduled(fixedRate = 60 * 1000) // 1 minute for faster updates
+    @Scheduled(fixedRate = 60 * 1000)
     public void syncToday() {
         try {
             syncService.syncFixtures(LocalDate.now().toString());
@@ -50,10 +42,7 @@ public class FixtureSyncJob {
         }
     }
     
-    /**
-     * Sync tomorrow's fixtures every 5 minutes.
-     */
-    @Scheduled(fixedRate = 5 * 60 * 1000) // 5 minutes
+    @Scheduled(fixedRate = 5 * 60 * 1000)
     public void syncTomorrow() {
         try {
             syncService.syncFixtures(LocalDate.now().plusDays(1).toString());

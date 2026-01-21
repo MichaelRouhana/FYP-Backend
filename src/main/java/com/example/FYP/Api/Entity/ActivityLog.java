@@ -24,5 +24,5 @@ public class ActivityLog {
     private String ip;
     private LocalDateTime timestamp;
 
-   
+
 }

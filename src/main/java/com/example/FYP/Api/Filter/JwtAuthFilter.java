@@ -43,30 +43,19 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             token = authHeader.substring(7);
             
             try {
-                // Attempt to extract username from token
-                // This will throw exceptions if token is expired, malformed, or has invalid signature
                 username = jwtService.extractUsername(token);
             } catch (ExpiredJwtException ex) {
                 log.warn("Expired JWT token detected for request to: {} - proceeding as anonymous", request.getRequestURI());
-                // Don't set authentication, but allow request to proceed
-                // Public endpoints will work, protected endpoints will fail later with 403
             } catch (MalformedJwtException ex) {
                 log.warn("Malformed JWT token detected for request to: {} - proceeding as anonymous", request.getRequestURI());
-                // Don't set authentication, but allow request to proceed
-                // Public endpoints will work, protected endpoints will fail later with 403
             } catch (SignatureException ex) {
                 log.warn("Invalid JWT signature for request to: {} - proceeding as anonymous", request.getRequestURI());
-                // Don't set authentication, but allow request to proceed
-                // Public endpoints will work, protected endpoints will fail later with 403
             } catch (Exception ex) {
                 log.warn("JWT parsing error for request to: {} - proceeding as anonymous. Error: {}", 
                         request.getRequestURI(), ex.getMessage());
-                // Don't set authentication, but allow request to proceed
-                // Public endpoints will work, protected endpoints will fail later with 403
             }
         }
 
-        // Only set authentication if we successfully extracted a username
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             try {
                 UserDetails userDetails = userDetailsServiceImpl.loadUserByUsername(username);
@@ -79,12 +68,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             } catch (Exception ex) {
                 log.warn("Failed to load user details for username: {} - proceeding as anonymous. Error: {}", 
                         username, ex.getMessage());
-                // Don't set authentication, but allow request to proceed
             }
         }
 
-        // Always continue the filter chain
-        // Public endpoints will work, protected endpoints will be checked by Spring Security
         filterChain.doFilter(request, response);
     }
 
