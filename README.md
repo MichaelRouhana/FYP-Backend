@@ -1,3 +1,6 @@
+
+**Services**
+
 | Service Name      | Container Name    | Image / Build           | Purpose                              | Exposed Ports   | Depends On                |
 | ----------------- | ----------------- | ----------------------- | ------------------------------------ | --------------- | ------------------------- |
 | **app**           | `spring-boot-app` | Built from `Dockerfile` | Spring Boot backend application      | `8080 → 8080`   | mysql, logstash, rabbitmq |
