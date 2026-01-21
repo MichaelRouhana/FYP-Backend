@@ -110,23 +110,9 @@ public class FixtureService {
                         return false;
                     }
                     
-                    // Check if match is finished
-                    boolean isFinished = false;
-                    try {
-                        JsonNode rawJson = objectMapper.readTree(fixture.getRawJson());
-                        String statusShort = rawJson.path("fixture").path("status").path("short").asText();
-                        isFinished = Set.of("FT", "AET", "PEN", "WO", "ABD", "AWD").contains(statusShort);
-                    } catch (Exception e) {
-                        log.warn("Failed to parse fixture status: {}", e.getMessage());
-                    }
-                    
-                    // For finished matches: only require showMatch == true
-                    // For upcoming/live matches: require both showMatch == true AND allowBetting == true
-                    if (isFinished) {
-                        return true; // Show finished matches if showMatch is true
-                    } else {
-                        return Boolean.TRUE.equals(fixture.getMatchSettings().getAllowBetting());
-                    }
+                    // Match visibility is controlled by showMatch only
+                    // allowBetting only controls whether betting is enabled, not match visibility
+                    return true; // Show match if showMatch is true (already checked above)
                 })
                 // Filter by date - only show matches from today onwards (up to 7 days)
                 .filter(fixture -> {
@@ -196,12 +182,32 @@ public class FixtureService {
         Fixture fixture = fixtureRepository.findById(fixtureId)
                 .orElseThrow(() -> new EntityNotFoundException("Fixture not found: " + fixtureId));
 
-        MatchSettings matchSettings = fixture.getMatchSettings() != null 
-                ? fixture.getMatchSettings() 
-                : MatchSettings.builder().build();
-
+        MatchSettings matchSettings = fixture.getMatchSettings();
+        
         // Map entity to DTO
-        return modelMapper.map(matchSettings, FixtureViewDTO.MatchSettingsView.class);
+        FixtureViewDTO.MatchSettingsView dto;
+        
+        if (matchSettings != null) {
+            // Map existing settings
+            dto = modelMapper.map(matchSettings, FixtureViewDTO.MatchSettingsView.class);
+        } else {
+            // Create new DTO with defaults
+            dto = new FixtureViewDTO.MatchSettingsView();
+        }
+        
+        // Always ensure defaults are set if null (for existing records that might have null values)
+        // This ensures consistency even if database has null values
+        if (dto.getAllowBettingHT() == null) {
+            dto.setAllowBettingHT(false);
+        }
+        if (dto.getShowMatch() == null) {
+            dto.setShowMatch(true);
+        }
+        if (dto.getAllowBetting() == null) {
+            dto.setAllowBetting(true);
+        }
+        
+        return dto;
     }
 
     public FixtureViewDTO.MatchPredictionSettingsView getMatchPredictionSettings(Long fixtureId) {
