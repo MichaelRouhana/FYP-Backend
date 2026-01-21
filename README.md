@@ -9,3 +9,52 @@
 | **logstash**      | `logstash`        | `logstash:8.6.0`        | Log processing and forwarding        | `5044`          | elasticsearch             |
 | **elasticsearch** | `elasticsearch`   | `elasticsearch:8.6.0`   | Log storage & search engine          | `9200`          | —                         |
 | **kibana**        | `kibana`          | `kibana:8.6.0`          | Log visualization & dashboards       | `5601`          | elasticsearch             |
+
+
+To run you need docker and docker-compose
+you need the docker-compose.yml file and application.properties
+
+
+to deploy run
+docker-compose -f docker-compose.yml up -d
+
+to check status
+docker ps
+
+to check logs 
+docker logs container-id
+
+to check volumes
+docker volume ls
+
+to shut down
+docker-compose -f docker-compose.yml down
+
+
+mysql:
+username : root
+password : root
+database : fyp
+
+
+in application.properties file
+
+api key:
+football.api.key=api-key
+
+email:
+spring.mail.username=example@gmail.com
+spring.mail.password=password
+
+mysql: 
+spring.datasource.url=jdbc:mysql://mysql:3306/fyp
+spring.datasource.username=root
+spring.datasource.password=root
+
+if you want elk
+spring.profiles.active=elk
+
+if not 
+spring.profiles.active=light
+
+
