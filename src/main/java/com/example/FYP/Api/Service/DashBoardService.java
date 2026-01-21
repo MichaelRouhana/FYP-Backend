@@ -39,18 +39,14 @@ public class DashBoardService {
 
 
     public List<ChartPoint> totalUsers() {
-        // Get last 7 days for the chart
         LocalDateTime startDate = LocalDateTime.now().minusDays(7);
         
-        // Fetch users created in the last 7 days (optimized query)
         List<User> recentUsers = userRepository.findByCreatedDateAfter(startDate);
         
-        // Get total count of users created BEFORE the start date (for cumulative calculation)
         long usersBeforeStart = userRepository.countByCreatedDateBefore(startDate);
         
         log.info("📊 User Stats - Users before start date: {}, Recent users: {}", usersBeforeStart, recentUsers.size());
         
-        // Group by date (daily new users) - handle timezone properly
         Map<LocalDate, Long> dailyNewUsers = recentUsers.stream()
                 .filter(u -> u.getCreatedDate() != null)
                 .collect(Collectors.groupingBy(
@@ -60,28 +56,21 @@ public class DashBoardService {
         
         log.info("📊 User Stats Raw Data (Daily New): {}", dailyNewUsers);
         
-        // Fill in missing days and calculate cumulative totals
         return buildCumulativeChart(dailyNewUsers, usersBeforeStart, 7);
     }
 
     public List<ChartPoint> totalActiveUsers() {
-        // Get last 7 days for the chart
         LocalDateTime startDate = LocalDateTime.now().minusDays(7);
         
-        // Define "active" as users with activity in the last 30 days
-        // Activity = placed bets OR lastModifiedDate (indicating login/profile update)
         LocalDateTime activityThreshold = LocalDateTime.now().minusDays(30);
         
-        // Fetch active users created in the last 7 days
         List<User> recentActiveUsers = userRepository.findActiveUsersByCreatedDateAfter(startDate, activityThreshold);
         
-        // Get total count of active users created BEFORE the start date
         long activeUsersBeforeStart = userRepository.countActiveUsersByCreatedDateBefore(startDate, activityThreshold);
         
         log.info("📊 Active User Stats - Active users before start date: {}, Recent active users: {}", 
                 activeUsersBeforeStart, recentActiveUsers.size());
         
-        // Group by date (daily new active users) - handle timezone properly
         Map<LocalDate, Long> dailyNewActiveUsers = recentActiveUsers.stream()
                 .filter(u -> u.getCreatedDate() != null)
                 .collect(Collectors.groupingBy(
@@ -91,7 +80,6 @@ public class DashBoardService {
         
         log.info("📊 Active User Stats Raw Data (Daily New): {}", dailyNewActiveUsers);
         
-        // Fill in missing days and calculate cumulative totals
         return buildCumulativeChart(dailyNewActiveUsers, activeUsersBeforeStart, 7);
     }
 
@@ -118,7 +106,6 @@ public class DashBoardService {
                     dto.setId(log.getId());
                     dto.setAction(log.getAction());
                     
-                    // Combine oldData and newData as details, or use entityName + entityId
                     String details = String.format("%s (ID: %s)", log.getEntityName(), log.getEntityId());
                     if (log.getOldData() != null || log.getNewData() != null) {
                         details += " - " + (log.getNewData() != null ? log.getNewData() : log.getOldData());
@@ -127,7 +114,6 @@ public class DashBoardService {
                     
                     dto.setTimestamp(log.getPerformedAt());
                     
-                    // performedBy is already a String (username), not a User object
                     dto.setUsername(log.getPerformedBy() != null ? log.getPerformedBy() : "System");
                     
                     return dto;
@@ -141,7 +127,6 @@ public class DashBoardService {
                 .stream()
                 .map(u -> {
                     UserViewDTO dto = modelMapper.map(u, UserViewDTO.class);
-                    // Explicitly map points to totalPoints since field names differ
                     if (dto.getTotalPoints() == null && u.getPoints() != null) {
                         dto.setTotalPoints(u.getPoints());
                     }
@@ -156,14 +141,12 @@ public class DashBoardService {
                 .map(user -> {
                     UserViewDTO dto = modelMapper.map(user, UserViewDTO.class);
                     
-                    // Count distinct tickets (not legs) for this user
                     long distinctTickets = betRepository.countDistinctTicketsByUserId(user.getId());
                     long nullTicketBets = user.getBets() != null ? user.getBets().stream()
                             .filter(bet -> bet.getTicketId() == null || bet.getTicketId().isEmpty())
                             .count() : 0L;
                     dto.setTotalBets(distinctTickets + nullTicketBets);
                     
-                    // Ensure points are set (map points -> totalPoints)
                     dto.setTotalPoints(user.getPoints() != null ? user.getPoints() : 0L);
                     
                     return dto;
@@ -177,10 +160,8 @@ public class DashBoardService {
                 .map(user -> {
                     UserViewDTO dto = modelMapper.map(user, UserViewDTO.class);
                     
-                    // Ensure points are set (map points -> totalPoints)
                     dto.setTotalPoints(user.getPoints() != null ? user.getPoints() : 0L);
                     
-                    // Count distinct tickets (not legs) for this user
                     long distinctTickets = betRepository.countDistinctTicketsByUserId(user.getId());
                     long nullTicketBets = user.getBets() != null ? user.getBets().stream()
                             .filter(bet -> bet.getTicketId() == null || bet.getTicketId().isEmpty())
@@ -193,7 +174,6 @@ public class DashBoardService {
     }
 
     public DashboardStatsDTO getDashboardStats(String timeRange) {
-        // 1. Determine the Date Threshold
         java.time.LocalDateTime threshold;
 
         if ("24h".equalsIgnoreCase(timeRange)) {
@@ -201,8 +181,6 @@ public class DashBoardService {
         } else if ("7d".equalsIgnoreCase(timeRange)) {
             threshold = java.time.LocalDateTime.now().minusDays(7);
         } else {
-            // Default "All Time" - count distinct tickets (not legs)
-            // Count distinct ticketIds + bets with NULL ticketId
             long distinctTickets = betRepository.countDistinctTickets();
             long nullTicketBets = betRepository.findAll().stream()
                     .filter(bet -> bet.getTicketId() == null || bet.getTicketId().isEmpty())
@@ -228,7 +206,6 @@ public class DashBoardService {
                     .build();
         }
 
-        // 2. Return filtered counts - count distinct tickets (not legs)
         long distinctTickets = betRepository.countDistinctTicketsByCreatedDateAfter(threshold);
         long nullTicketBets = betRepository.findAll().stream()
                 .filter(bet -> bet.getCreatedDate() != null && 
@@ -274,13 +251,11 @@ public class DashBoardService {
         List<ChartPoint> chartPoints = new ArrayList<>();
         long runningTotal = initialCount;
         
-        // Iterate through each day from startDate to today
         for (int i = 0; i < days; i++) {
             LocalDate currentDate = startDate.plusDays(i);
             long dailyCount = dailyData.getOrDefault(currentDate, 0L);
             runningTotal += dailyCount;
             
-            // Format date as string (YYYY-MM-DD)
             String dateStr = currentDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
             chartPoints.add(new ChartPoint(dateStr, runningTotal));
         }
@@ -309,15 +284,12 @@ public class DashBoardService {
     }
 
     private List<ChartPoint> betsPerDate(List<Bet> bets) {
-        // Get last 7 days for the chart
         LocalDateTime startDate = LocalDateTime.now().minusDays(7);
         
-        // Filter bets from last 7 days
         List<Bet> recentBets = bets.stream()
                 .filter(b -> b.getCreatedDate() != null && b.getCreatedDate().isAfter(startDate))
                 .collect(Collectors.toList());
         
-        // Group by date (daily new bets)
         Map<LocalDate, Long> dailyBets = recentBets.stream()
                 .filter(b -> b.getCreatedDate() != null)
                 .collect(Collectors.groupingBy(
@@ -327,7 +299,6 @@ public class DashBoardService {
         
         log.info("📊 Bet Stats Raw Data (Daily): {}", dailyBets);
         
-        // Fill in missing days (for bets, we show daily counts, not cumulative)
         return buildDailyChart(dailyBets, 7);
     }
 
@@ -335,16 +306,12 @@ public class DashBoardService {
      * Count distinct tickets (not legs) per date
      */
     private List<ChartPoint> betsPerDateDistinctTickets(List<Bet> bets) {
-        // Get last 7 days for the chart
         LocalDateTime startDate = LocalDateTime.now().minusDays(7);
         
-        // Filter bets from last 7 days
         List<Bet> recentBets = bets.stream()
                 .filter(b -> b.getCreatedDate() != null && b.getCreatedDate().isAfter(startDate))
                 .collect(Collectors.toList());
         
-        // Group by date and count distinct tickets (not legs)
-        // For each date, count distinct ticketIds + bets with NULL ticketId
         Map<LocalDate, Long> dailyTickets = recentBets.stream()
                 .filter(b -> b.getCreatedDate() != null)
                 .collect(Collectors.groupingBy(
@@ -352,13 +319,11 @@ public class DashBoardService {
                         Collectors.collectingAndThen(
                                 Collectors.toList(),
                                 betList -> {
-                                    // Count distinct ticketIds
                                     long distinctTickets = betList.stream()
                                             .filter(b -> b.getTicketId() != null && !b.getTicketId().isEmpty())
                                             .map(Bet::getTicketId)
                                             .distinct()
                                             .count();
-                                    // Count bets with NULL ticketId (each is a separate ticket)
                                     long nullTicketBets = betList.stream()
                                             .filter(b -> b.getTicketId() == null || b.getTicketId().isEmpty())
                                             .count();
@@ -369,7 +334,6 @@ public class DashBoardService {
         
         log.info("📊 Bet Stats Raw Data (Daily Distinct Tickets): {}", dailyTickets);
         
-        // Fill in missing days (for bets, we show daily counts, not cumulative)
         return buildDailyChart(dailyTickets, 7);
     }
     
@@ -385,12 +349,10 @@ public class DashBoardService {
         
         List<ChartPoint> chartPoints = new ArrayList<>();
         
-        // Iterate through each day from startDate to today
         for (int i = 0; i < days; i++) {
             LocalDate currentDate = startDate.plusDays(i);
             long dailyCount = dailyData.getOrDefault(currentDate, 0L);
             
-            // Format date as string (YYYY-MM-DD)
             String dateStr = currentDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
             chartPoints.add(new ChartPoint(dateStr, dailyCount));
         }

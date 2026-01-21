@@ -53,17 +53,15 @@ public class TeamService {
             JsonNode venue = response.get(0).path("venue");
             JsonNode coach = response.get(0).path("coach");
 
-            // Fetch coach details from dedicated coach endpoint
             CoachDTO coachDTO = footBallService.getCoachByTeamId(teamId);
             
-            // Use coach from dedicated endpoint if available, otherwise fallback to team data
             String coachName = coachDTO != null && coachDTO.getName() != null && !coachDTO.getName().isEmpty()
                     ? coachDTO.getName()
                     : coach.path("name").asText("");
             
             String coachImageUrl = coachDTO != null && coachDTO.getPhotoUrl() != null && !coachDTO.getPhotoUrl().isEmpty()
                     ? coachDTO.getPhotoUrl()
-                    : null; // null means no image, frontend will show icon fallback
+                    : null;
 
             return TeamHeaderDTO.builder()
                     .name(teamData.path("name").asText(""))
@@ -86,11 +84,10 @@ public class TeamService {
      */
     public FixtureViewDTO getLastMatch(Long teamId) {
         try {
-            // Find last finished match where team is either home or away
             List<Fixture> fixtures = fixtureRepository.findLastFinishedMatchByTeamId(teamId);
             
             if (fixtures.isEmpty()) {
-                return null; // No finished matches found
+                return null;
             }
 
             Fixture lastFixture = fixtures.get(0);
@@ -114,7 +111,6 @@ public class TeamService {
                 return Collections.emptyList();
             }
 
-            // API-Sports returns: response[0].players[] array
             JsonNode players = response.get(0).path("players");
             if (!players.isArray() || players.size() == 0) {
                 return Collections.emptyList();
@@ -139,7 +135,6 @@ public class TeamService {
                 squad.add(member);
             }
 
-            // Sort by position: GK, DEF, MID, FWD
             return squad.stream()
                     .sorted(Comparator.comparing(m -> getPositionOrder(m.getPosition())))
                     .collect(Collectors.toList());
@@ -158,77 +153,62 @@ public class TeamService {
      */
     public TeamStatsDTO getTeamStatistics(Long teamId, Long leagueId, Integer season) {
         try {
-            // Use 2025 season if not provided
             if (season == null) {
-                season = 2025; // Default to 2025 which has data
+                season = 2025;
             }
             
-            // Fetch team statistics from external API
             String jsonResponse = fetchFromApi("teams/statistics", 
                     Map.of("team", teamId.toString(), "league", leagueId.toString(), "season", season.toString()));
             
-            // Log the raw response for debugging
             log.info("API Response for team {} league {} season {}: {}", teamId, leagueId, season, jsonResponse);
             
             JsonNode root = objectMapper.readTree(jsonResponse);
             JsonNode response = root.path("response");
             
-            // Check for API errors
             if (root.has("errors") && root.path("errors").size() > 0) {
                 log.error("API returned errors: {}", root.path("errors"));
                 return buildDefaultStats();
             }
             
-            // API-Football /teams/statistics returns response as an OBJECT, not an array
             if (response.isMissingNode() || response.isNull()) {
                 log.warn("Missing response for team {} league {} season {}", teamId, leagueId, season);
                 return buildDefaultStats();
             }
 
-            // The response is already the statistics object (not an array)
             JsonNode statsData = response;
             
-            // Build Summary from fixtures
-            // API-Football returns: fixtures.played.total, fixtures.wins.total, etc.
             JsonNode fixtures = statsData.path("fixtures");
             TeamStatsDTO.Summary summary = TeamStatsDTO.Summary.builder()
                     .played(safeInt(fixtures.path("played").path("total")))
                     .wins(safeInt(fixtures.path("wins").path("total")))
                     .draws(safeInt(fixtures.path("draws").path("total")))
                     .loses(safeInt(fixtures.path("loses").path("total")))
-                    .form(safeString(statsData.path("form"))) // form is at root level
+                    .form(safeString(statsData.path("form")))
                     .build();
 
-            // Build Attacking from goals and penalty
             JsonNode goals = statsData.path("goals");
             JsonNode penalty = statsData.path("penalty");
             
             TeamStatsDTO.Attacking attacking = TeamStatsDTO.Attacking.builder()
-                    .goalsScored(safeInt(goals.path("for").path("total").path("total"))) // goals.for.total.total
-                    .penaltiesScored(safeInt(penalty.path("scored").path("total"))) // penalty.scored.total
-                    .penaltiesMissed(safeInt(penalty.path("missed").path("total"))) // penalty.missed.total
+                    .goalsScored(safeInt(goals.path("for").path("total").path("total")))
+                    .penaltiesScored(safeInt(penalty.path("scored").path("total")))
+                    .penaltiesMissed(safeInt(penalty.path("missed").path("total")))
                     .build();
 
-            // Build Defending from goals against and clean sheets
             TeamStatsDTO.Defending defending = TeamStatsDTO.Defending.builder()
-                    .goalsConceded(safeInt(goals.path("against").path("total").path("total"))) // goals.against.total.total
-                    .cleanSheets(safeInt(statsData.path("clean_sheet").path("total"))) // clean_sheet.total
+                    .goalsConceded(safeInt(goals.path("against").path("total").path("total")))
+                    .cleanSheets(safeInt(statsData.path("clean_sheet").path("total")))
                             .build();
 
-            // Build Other from cards
             JsonNode cards = statsData.path("cards");
             
-            // Cards structure: cards.yellow and cards.red are objects with time-based breakdowns
-            // We need to sum them up or get total if available
             Integer yellowCards = 0;
             Integer redCards = 0;
             if (!cards.isMissingNode()) {
-                // Try to get total from yellow/red objects, or sum the time periods
                 JsonNode yellow = cards.path("yellow");
                 if (yellow.has("total")) {
                     yellowCards = safeInt(yellow.path("total"));
                 } else if (yellow.isObject()) {
-                    // Sum all time periods if total not available
                     yellowCards = yellow.findValues("total").stream()
                             .filter(JsonNode::isInt)
                             .mapToInt(JsonNode::asInt)
@@ -239,7 +219,6 @@ public class TeamService {
                 if (red.has("total")) {
                     redCards = safeInt(red.path("total"));
                 } else if (red.isObject()) {
-                    // Sum all time periods if total not available
                     redCards = red.findValues("total").stream()
                             .filter(JsonNode::isInt)
                             .mapToInt(JsonNode::asInt)
@@ -354,7 +333,6 @@ public class TeamService {
      */
     public TeamDetailsDTO getTeamDetails(Long teamId) {
         try {
-            // Fetch team info from FootballService
             FootBallService.TeamResponse teamResponse = footBallService.getTeamInfo(teamId);
             
             if (teamResponse == null) {
@@ -369,7 +347,6 @@ public class TeamService {
                 throw new EntityNotFoundException("Team data incomplete for ID: " + teamId);
             }
 
-            // Map the external data to TeamDetailsDTO
             return TeamDetailsDTO.builder()
                     .stadiumName(venue.getName() != null ? venue.getName() : "")
                     .stadiumImage(venue.getImage() != null ? venue.getImage() : "")
@@ -392,8 +369,6 @@ public class TeamService {
      */
     public List<TrophyDTO> getTrophies(Long teamId) {
         try {
-            // Attempt to fetch trophies from external API
-            // Note: This endpoint may not exist in the standard API-Sports plan
             String jsonResponse = fetchFromApi("trophies", Map.of("team", teamId.toString()));
             JsonNode root = objectMapper.readTree(jsonResponse);
             JsonNode response = root.path("response");
@@ -414,14 +389,11 @@ public class TeamService {
 
             return trophies;
         } catch (Exception e) {
-            // Trophies endpoint might not exist in the API plan, return empty list gracefully
             log.debug("Trophies endpoint not available for team ID {} (this is expected if not in API plan): {}", 
                     teamId, e.getMessage());
             return Collections.emptyList();
         }
     }
-
-    // Helper methods
 
     private String fetchFromApi(String endpoint, Map<String, String> params) {
         String baseUrl = "https://v3.football.api-sports.io/" + endpoint;
@@ -458,7 +430,6 @@ public class TeamService {
     }
 
     private Integer extractUefaRanking(JsonNode teamData) {
-        // Try to extract ranking from various possible fields
         if (teamData.has("rank")) {
             return teamData.path("rank").asInt(0);
         }
@@ -487,7 +458,6 @@ public class TeamService {
     private Integer parseHeight(String heightStr) {
         if (heightStr == null || heightStr.isEmpty()) return null;
         try {
-            // Extract number from strings like "180 cm" or "180"
             String numeric = heightStr.replaceAll("[^0-9]", "");
             return numeric.isEmpty() ? null : Integer.parseInt(numeric);
         } catch (Exception e) {

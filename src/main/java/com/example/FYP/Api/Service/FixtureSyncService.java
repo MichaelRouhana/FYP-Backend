@@ -24,7 +24,6 @@ public class FixtureSyncService {
     private final FixtureRepository fixtureRepository;
     private final ObjectMapper objectMapper;
     
-    // Statuses that indicate a match is finished
     private static final Set<String> FINISHED_STATUSES = Set.of("FT", "AET", "PEN", "PST", "CANC", "ABD", "AWD", "WO");
 
     /**
@@ -60,13 +59,11 @@ public class FixtureSyncService {
                     continue;
                 }
 
-                // Check if fixture already exists
                 Optional<Fixture> existingFixtureOpt = fixtureRepository.findById(fixtureId);
                 
                 if (existingFixtureOpt.isPresent()) {
                     Fixture fixture = existingFixtureOpt.get();
                     
-                    // Get old status for comparison
                     String oldStatus = "";
                     try {
                         JsonNode oldJson = objectMapper.readTree(fixture.getRawJson());
@@ -75,10 +72,8 @@ public class FixtureSyncService {
                         log.warn("Could not parse old status for fixture {}", fixtureId);
                     }
                     
-                    // Update the rawJson
                     fixture.setRawJson(matchNode.toString());
                     
-                    // Ensure MatchSettings exist (auto-create if missing)
                     if (fixture.getMatchSettings() == null) {
                         fixture.setMatchSettings(MatchSettings.builder()
                                 .allowBetting(true)
@@ -87,11 +82,9 @@ public class FixtureSyncService {
                                 .build());
                     }
                     
-                    // If status changed to finished, disable betting
                     if (!oldStatus.equals(newStatus) && FINISHED_STATUSES.contains(newStatus)) {
                         fixture.getMatchSettings().setAllowBetting(false);
                         fixture.getMatchSettings().setAllowBettingHT(false);
-                        // Keep showMatch as true (admin can still see finished matches)
                         finishedCount++;
                         log.info("Fixture {} finished ({} -> {}), betting disabled", 
                                 fixtureId, oldStatus, newStatus);
@@ -100,8 +93,6 @@ public class FixtureSyncService {
                     fixtureRepository.save(fixture);
                     updatedCount++;
                 } else {
-                    // Create new fixture with default settings
-                    // If already finished, disable betting from the start
                     boolean isFinished = FINISHED_STATUSES.contains(newStatus);
                     
                     Fixture fixture = Fixture.builder()

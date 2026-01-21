@@ -29,10 +29,6 @@ public class DraftController {
 
 
     @PostMapping("/testRoleType")
-/*    @RequiredRoleTypes({
-            @RoleTypeMapping(type = "PURCHASE", roles = {OrganizationRoles.OWNER}),
-            @RoleTypeMapping(type = "PAYMENT", roles = {OrganizationRoles.MEMBER})
-    })*/
     public ResponseEntity<String> testRoleType(@RequestParam() String organizationUUID, @RequestBody TestRole request) {
         throw new NotImplementedException("not implemented");
     }

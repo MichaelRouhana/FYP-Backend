@@ -24,14 +24,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // Raw WebSocket endpoint for React Native and other native clients
-        // Note: With servlet context-path=/api/v1, this endpoint becomes /api/v1/ws
-        // Register at /ws, but clients must connect to /api/v1/ws
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*") // ✅ Use this ONLY
+                .setAllowedOriginPatterns("*")
                 .addInterceptors(new WebSocketHandshakeInterceptor());
         
-        // SockJS endpoint for web browsers (fallback)
         registry.addEndpoint("/ws/sockjs")
                 .setAllowedOriginPatterns("*")
                 .addInterceptors(new WebSocketHandshakeInterceptor())
@@ -45,15 +41,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        // Configure thread pool for better debugging
         registration.taskExecutor().corePoolSize(1).maxPoolSize(1);
-        // Add interceptor with highest priority
-        registration.interceptors(webSocketAuthInterceptor); // add JWT interceptor
+        registration.interceptors(webSocketAuthInterceptor);
     }
     
     @Override
     public void configureClientOutboundChannel(ChannelRegistration registration) {
-        // Also log outbound messages for debugging
         registration.taskExecutor().corePoolSize(1).maxPoolSize(1);
     }
 

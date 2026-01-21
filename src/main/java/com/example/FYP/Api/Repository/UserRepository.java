@@ -20,17 +20,12 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
     Optional<User> findByEmail(String email);
 
-    // Search users by username (case-insensitive)
     Page<User> findByUsernameContainingIgnoreCase(String search, Pageable pageable);
 
-    // Find all users with pagination
     Page<User> findAll(Pageable pageable);
 
-    // Find users sorted by points (descending)
     Page<User> findAllByOrderByPointsDesc(Pageable pageable);
 
-    // Find top betters (users sorted by number of won bets)
-    // Using native query to count won bets per user
     @Query(value = """
         SELECT u.*
         FROM users u
@@ -60,16 +55,12 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     @Query("SELECT u FROM User u JOIN u.communities o WHERE u.email = :email AND o.id = :communityId")
     Optional<User> findByEmailAndCommunityId(@Param("email") String email, @Param("communityId") Long communityId);
 
-    // Find users created after a specific date (for dashboard charts)
     @Query("SELECT u FROM User u WHERE u.createdDate >= :startDate ORDER BY u.createdDate ASC")
     List<User> findByCreatedDateAfter(@Param("startDate") java.time.LocalDateTime startDate);
     
-    // Count users created before a specific date (for cumulative calculations)
     @Query("SELECT COUNT(u) FROM User u WHERE u.createdDate < :startDate")
     long countByCreatedDateBefore(@Param("startDate") java.time.LocalDateTime startDate);
     
-    // Find active users created after a specific date
-    // Active = users who have placed bets in the last 30 days OR have recent activity (lastModifiedDate)
     @Query("""
         SELECT DISTINCT u 
         FROM User u 
@@ -90,7 +81,6 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
         @Param("activityThreshold") java.time.LocalDateTime activityThreshold
     );
     
-    // Count active users created before a specific date
     @Query("""
         SELECT COUNT(DISTINCT u) 
         FROM User u 

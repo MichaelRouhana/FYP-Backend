@@ -14,24 +14,6 @@ public class Main {
     private static final AtomicInteger testCase = new AtomicInteger(0);
 
     public static void main(String[] args) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException, InterruptedException, ExecutionException {
-        /*Set<String> officialCountries = new HashSet<>(Arrays.asList(Locale.getISOCountries()));
-
-        BigDecimal bigDecimal = new BigDecimal("23.23");
-        System.out.println(bigDecimal);
-
-        // Example: Print the number of official countries
-        System.out.println("Number of Officially Recognized Countries: " + officialCountries.size());
-
-        // Print the official country codes
-        System.out.println(officialCountries);
-        *//*  Method method = Main.class.getMethod("singleThreadTest",long.class);
-        Method method2 = Main.class.getMethod("multiThreadTest",long.class);
-
-        long elapsedTime = test(method);
-        long elapsedTime2 = test(method2);
-
-        System.out.println("4 Threads is faster than a single thread : " + elapsedTime / elapsedTime2);*/
-
         long n = 100_000_000_000L;
 
         ExecutorService executor = Executors.newFixedThreadPool(10);
@@ -43,11 +25,9 @@ public class Main {
             futures.add(future);
         }
 
-        // Shutdown the executor and wait for all tasks to finish
         executor.shutdown();
         executor.awaitTermination(1, TimeUnit.MINUTES);
 
-        // Retrieve and print results
         for (int i = 0; i < futures.size(); i++) {
             long time = futures.get(i).get();
             System.out.println("Task " + i + " took: " + time + " ms");

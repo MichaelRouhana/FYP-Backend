@@ -54,9 +54,7 @@ public class SecurityConfig implements WebMvcConfigurer {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/users/login", "/users/signup", "/users/verify", "/users/login/google").permitAll()
-                        // WebSocket endpoints - must be permitted for upgrade request
                         .requestMatchers("/ws", "/ws/**", "/ws/sockjs/**", "/api/v1/ws/**").permitAll()
-                        // Static file uploads - permit access to uploaded files
                         .requestMatchers("/uploads/**", "/api/v1/uploads/**").permitAll()
                         .requestMatchers("/txn/**",
                                 "/bets/**",
