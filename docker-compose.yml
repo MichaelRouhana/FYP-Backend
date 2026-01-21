@@ -13,7 +13,7 @@ services:
     environment:
       SPRING_CONFIG_LOCATION: "file:/app/config/application.properties"
       SPRING_PROFILES_ACTIVE: elk
-      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql-db:3306/jwt_auth_db?allowPublicKeyRetrieval=true&useSSL=false&createDatabaseIfNotExist=true"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql-db:3306/fyp?allowPublicKeyRetrieval=true&useSSL=false&createDatabaseIfNotExist=true"
       SPRING_DATASOURCE_USERNAME: root
       SPRING_DATASOURCE_PASSWORD: root
       LOGSTASH_HOST: logstash
@@ -30,7 +30,7 @@ services:
     container_name: mysql-db
     environment:
       MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: jwt_auth_db
+      MYSQL_DATABASE: fyp
     ports:
       - "3306:3306"
     volumes:
